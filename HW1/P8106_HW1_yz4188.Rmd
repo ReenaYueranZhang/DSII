@@ -1,0 +1,217 @@
+---
+title: "P8106 Data ScienceII Homework1"
+author: "Yueran Zhang(yz4188)"
+date: '2023-02-17'
+output:
+  pdf_document:
+    toc_depth: 2
+  html_document:
+    toc_depth: '2'
+---
+
+In this exercise, we predict the sale price of a house using its other characteristics. The training data are in “housing train.csv”, and the test data are in “housing test.csv”. The response is in the column “Sale price”. Among the 25 feature variables, some are numeric features, such as living area square feet or first floor square feet, and some are categorical features, such as the overall material and finish of the house or kitchen quality. A detailed description of the variables is in “dictionary.txt”.
+
+# Dataset Preparing
+```{r Setup, echo = T, message = FALSE, results='hide', warning=FALSE}
+library(ISLR)
+library(pls)
+library(dplyr)
+library(glmnet)
+library(caret)
+library(corrplot)
+library(plotmo)
+```
+
+# Import Datafile
+```{r,echo = T, message = FALSE, results='hide', warning=FALSE}
+set.seed(123)
+training = read.csv("/Users/yueranzhang/Desktop/DSII/DSII/Dataset/housing_training.csv")
+test = read.csv("//Users/yueranzhang/Desktop/DSII/DSII/Dataset/housing_test.csv")
+
+# delete rows containing the missing data
+training <- na.omit(training)
+test <- na.omit(test)
+```
+
+```{r}
+training_x <- model.matrix(Sale_Price ~ ., training) [, -1]
+training_y <- training$Sale_Price
+test_x <- model.matrix(Sale_Price ~ ., test) [, -1]
+test_y <- test$Sale_Price
+```
+
+# Validiation Control
+```{r}
+ctrl1 <- trainControl(method = "repeatedcv", number = 10, repeats = 5)
+```
+
+# Question1 
+## Fit a linear model using least squares on the training data.
+
+```{r Question1, echo = T}
+set.seed(123)
+Linear_Model <- lm(Sale_Price ~ . ,
+                      data = training)
+summary(Linear_Model)
+```
+
+# Question2
+## Fit a lasso model on the training data. Report the selected tuning parameter and the test error. When the 1SE rule is applied, how many predictors are included in the model?
+
+### Report the tuning parameter
+
+The tuning parameter lambda is chosen by cross-validation
+```{r, Question2, echo = T}
+
+set.seed(123)
+Lasso_fit <- train(training_x, training_y,
+                       method = "glmnet",
+                      tuneGrid = expand.grid(alpha = 1,
+                                             lambda = exp(seq(10, -6,length = 700))),
+                      trControl = ctrl1)
+```
+
+```{r lasso plot}
+plot(Lasso_fit)
+plot(Lasso_fit, xTrans = function(x) log(x))
+```
+
+
+```{r tuning parameter lambda}
+bestlam_lasso = Lasso_fit$bestTune$lambda
+bestlam_lasso
+```
+* The tuning parameter is ` r bestlam_lasso`.
+
+```{r test error}
+lasso_pred = predict(Lasso_fit$finalModel, s = bestlam_lasso, newx = test_x)
+mean((lasso_pred - test_y)^2)
+```
+
+* The mean test error is `r mean((lasso_pred - test_y)^2)`.
+
+###  Numbers of the predictors
+```{r 1SE}
+set.seed(123)
+cv.ridge <- cv.glmnet(training_x, training_y,
+                      alpha = 1,
+                      lambda = exp(seq(10, -6, length = 700)))
+plot(cv.ridge)
+abline(h = (cv.ridge$cvm + cv.ridge$cvsd)[which.min(cv.ridge$cvm)], col = 4, lwd = 2)
+
+# the 1SE rule
+set.seed(123)
+lasso_1SE = cv.ridge$lambda.1se
+lasso_1SE
+
+# number of predictors 
+## The number of coefficients - 1 (for the intercept) should work to give us the number of predictors.
+lasso_coef = predict(cv.ridge, s = "lambda.1se", type = "coefficients") 
+lasso_coef
+```
+
+When applying the 1SE, the number of predictors is 35.
+
+
+# Question3
+## Fit an elastic net model on the training data. Report the selected tuning parameters and the test error. Is it possible to apply the 1SE rule to select the tuning parameters?
+
+### Report the selected tuning parameters and the test error
+```{r elastic net}
+set.seed(123)
+enet_fit <- train(training_x,training_y,
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 21), 
+                                         lambda = exp(seq(10, -3, length = 70))),
+                  trControl = ctrl1)
+```
+
+```{r plot}
+
+myCol <- rainbow(25)
+myPar <- list(superpose.symbol = list(col = myCol),
+                    superpose.line = list(col = myCol))
+plot(enet_fit, par.settings = myPar)
+```
+
+
+```{r enet tuning parameter lambda }
+bestlam_enet = enet_fit$bestTune
+bestlam_enet
+```
+* The tuning parameter $\lambda$ is `r enet_fit$bestTune$lambda`. The tuning parameter $\alpha$ is `r enet_fit$bestTune$alpha`. 
+
+
+```{r}
+pred_enet = predict(enet_fit$finalModel,s = enet_fit$bestTune$lambda,newx = test_x)
+mean((pred_enet - test_y)^2)
+```
+* The mean test error is `r mean((pred_enet - test_y)^2)`.
+
+### Apply the 1SE rule to select the tuning parameters?
+
+* In order to fit a linear regression model using the Elastic net model method on the training, we will set with lambda 1 and lambda 2 (or lambda and alpha) chosen by cross-validation. When we applying the 1SE, and try to tune alpha and lambda.1se for an elastic net,in the glmnet package, it is possible to tune lambda.1se, but it is not possible to tune alpha and lambda at the same time. Therefore, it is not suitable to apply the 1SE rule to select the tuning parameters.
+
+
+# Question 4
+## Fit a partial least squares model on the training data and report the test error. How many components are included in your model?
+
+###  Report the test error
+```{r Partial least square}
+set.seed(123)
+pls_mod <- plsr(Sale_Price~., 
+                data = training, 
+                scale = TRUE,  
+                validation = "CV")
+
+summary(pls_mod)
+```
+
+```{r}
+validationplot(pls_mod, val.type ="MSEP", legendpos = "topright")
+```
+
+```{r training error}
+# training error
+cv.mse <- RMSEP(pls_mod)
+mean(min(cv.mse$val[1,,])^2)
+```
+
+
+```{r # of components}
+# number of components
+num_cv <- which.min(cv.mse$val[1,,])-1
+num_cv
+```
+* The model is with 8 components.
+
+```{r PLS test error}
+# MSE
+pls_pred <- predict(pls_mod, newdata = test_x, 
+                      ncomp = num_cv)
+# test MSE
+mean((test_y - pls_pred)^2)
+```
+* The testing error is `r mean((test_y - pls_pred)^2)`.
+
+
+
+# Question5
+## Which model will you choose for predicting the response? Why?
+### summary for models
+
+```{r Q5}
+
+## Lasso
+mean((lasso_pred - test_y)^2)
+
+## Elastic Net Model
+mean((pred_enet - test_y)^2)
+
+## Partial Least Squares model
+mean((test_y - pls_pred)^2)
+```
+
+* As for response predicting model, we would choose the model with the lowest error on predicting the test set. From the above summary, the test error(MSE) for each model is that lasso regression model with `r mean((lasso_pred - test_y)^2)`, Elastic Net Model with  `r mean((pred_enet - test_y)^2)`, and Partial Least Squares model with `r mean((test_y - pls_pred)^2)`. By comparing the MSE value for each model, we see that Partial Least Squares model has the lowest test error, Partial Least Squares model regression model would be the best choice for predicting the response.
+
+
