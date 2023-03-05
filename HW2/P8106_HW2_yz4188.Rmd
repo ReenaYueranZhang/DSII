@@ -1,0 +1,79 @@
+---
+title: "P8106 Data ScienceII Homework2"
+author: "Yueran Zhang(yz4188)"
+date: '2023-03-05'
+output:
+  pdf_document:
+    toc_depth: 2
+  html_document:
+    toc_depth: '2'
+---
+
+In this exercise, we build nonlinear models using the “College” data. The dataset contains statistics for 565 US Colleges from a previous issue of US News and World Report. The response variable is the out-of-state tuition (Outstate).Partition the dataset into two parts: training data (80%) and test data (20%).
+
+# R Package
+```{r R package, echo = T, message = FALSE, results='hide', warning=FALSE}
+library(caret)
+library(splines)
+library(mgcv)
+library(pdp)
+library(earth)
+library(tidyverse)
+library(ggplot2)
+```
+
+# Import Dataset
+
+```{r Dataset Import,echo = T, message = FALSE, results='hide', warning=FALSE}
+
+set.seed(123)
+
+# Load dataset + clean data
+College = read.csv("/Users/yueranzhang/Desktop/DSII/HW2/DataSet/College.csv")[-1] %>% 
+janitor::clean_names() %>% 
+na.omit()
+
+# Data Partition
+RowTrain <- createDataPartition(y = College$outstate,
+                                p = 0.8,
+                                list = FALSE)
+train_data <- College[RowTrain,]
+test_data <- College[-RowTrain,]
+```
+
+\newpage
+
+(a) Fit smoothing spline models using perc.alumni as the only predictor of Outstate for a range of degrees of freedom, as well as the degree of freedom obtained by generalized cross-validation, and plot the resulting fits. Describe the results obtained.
+
+```{r QuestionA}
+
+set.seed(123)
+
+perc_alumni.grid <- seq(from =0, to = 70, by = 1)
+fit.ss <- smooth.spline(train_data$perc_alumni, train_data$outstate,cv = TRUE)
+
+fit.ss$df
+
+fit.ss$lambda
+
+# plot the fit
+
+pred.ss <- predict(fit.ss,
+                   x =perc_alumni.grid)
+
+pred.ss.df <- data.frame(pred = pred.ss$y,
+                         perc_alumni = perc_alumni.grid)
+
+p <- ggplot(data = train_data, aes(x = perc_alumni, y = outstate)) +
+     geom_point(color = rgb(.2, .4, .2, .5))
+
+p +
+geom_line(aes(x = perc_alumni.grid, y = pred), data = pred.ss.df,
+          color = rgb(.8, .1, .1, 1)) + theme_bw()
+```
+
+* The degree of freedom that we obtained by generalized cross-validation is `r fit.ss$df`. From the above plot, the smoothing spline is nearly to a linear line, or that's to say this model fits the data quite well.
+* It is noticed that as we get the $\lambda$ value is `r fit.ss$lambda`, which is pretty large, so for the function estimate  $f_\lambda$ is essentially constrained to have a zero penalty, and it is forced to be smoother.
+
+
+
