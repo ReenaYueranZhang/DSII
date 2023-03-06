@@ -20,6 +20,7 @@ library(pdp)
 library(earth)
 library(tidyverse)
 library(ggplot2)
+library(gridExtra)
 ```
 
 # Import Dataset
@@ -37,13 +38,22 @@ na.omit()
 RowTrain <- createDataPartition(y = College$outstate,
                                 p = 0.8,
                                 list = FALSE)
+
 train_data <- College[RowTrain,]
 test_data <- College[-RowTrain,]
+
+
+# matrix of predictors
+x <- model.matrix(outstate ~. , train_data) [,-1]
+# vector of response
+y <- train_data$outstate  
+
 ```
 
 \newpage
 
-(a) Fit smoothing spline models using perc.alumni as the only predictor of Outstate for a range of degrees of freedom, as well as the degree of freedom obtained by generalized cross-validation, and plot the resulting fits. Describe the results obtained.
+# Question A
+Fit smoothing spline models using perc.alumni as the only predictor of Outstate for a range of degrees of freedom, as well as the degree of freedom obtained by generalized cross-validation, and plot the resulting fits. Describe the results obtained.
 
 ```{r QuestionA}
 
@@ -75,5 +85,119 @@ geom_line(aes(x = perc_alumni.grid, y = pred), data = pred.ss.df,
 * The degree of freedom that we obtained by generalized cross-validation is `r fit.ss$df`. From the above plot, the smoothing spline is nearly to a linear line, or that's to say this model fits the data quite well.
 * It is noticed that as we get the $\lambda$ value is `r fit.ss$lambda`, which is pretty large, so for the function estimate  $f_\lambda$ is essentially constrained to have a zero penalty, and it is forced to be smoother.
 
+
+# Question B
+Fit a generalized additive model (GAM) using all the predictors. Does your GAM model include all the predictors? Plot the results and explain your findings. Report the test error.
+
+```{r QuestionB-1}
+
+set.seed(123)
+                                
+ctrl <- trainControl(method = "cv", number = 10)
+
+gam.fit <- train(x, y,
+                 method = "gam",
+                 tuneGrid = data.frame(method = "GCV.Cp", select = TRUE),
+                 trControl = ctrl)
+
+gam.fit
+
+gam.fit$finalModel
+
+```
+
+* From the above output, there are 16 predictors, which means the GAM model include all the predictors.
+
+```{r QuestionB-2}
+
+set.seed(123)
+
+summary(gam.fit)
+
+# Plot of each predictor versus the outcome variable (outstate)
+plot(gam.fit$finalModel, pages = 6)
+
+```
+
+* According to p-value, for some predictors, there is not sufficient evidence in the data to conclude they are significant association with the outcome variable outstate at the 5% significance level, like **terminal(Pct. of faculty with terminal degree)**, **ph_d(ct. of faculty with Ph.D.’s)**,**top25perc(Pct. new students from top 25% of H.S. class)**, and **p_undergrad(Number of parttime undergraduates)**. However, some of the predictors seems to have linear relationship with the model, such as **grad_rate( Graduation rate)** and **personal(Estimated personal spending)**.
+
+* The Deviance explained by the model is 83.7%, and the adjusted R-Square is 81.5%, that showing a high level of correlation. The GAM model fits the data pretty well.
+
+
+```{r Question B-3}
+set.seed(123)
+
+# Test Error(MSE)
+testdata_x = test_data %>% 
+select(-outstate)
+
+gam.pred <- predict(gam.fit, newdata = testdata_x)
+
+mean((gam.pred - test_data$outstate)^2)
+
+```
+
+* The test error of the GAM model is `r mean((gam.pred - test_data$outstate)^2) `.
+
+
+# Question C
+
+Train a multivariate adaptive regression spline (MARS) model using all the predictors. Report the final model. Present the partial dependence plot of an arbitrary predictor in your final model. Report the test error.
+
+```{r QuestionC-MARS model}
+mars_grid <- expand.grid(degree = 1:3, 
+                         nprune = 2:20)
+
+set.seed(123)
+mars.fit <- train(x, y,
+                  method = "earth",
+                  tuneGrid = mars_grid,
+                  trControl = ctrl)
+
+# Plot of gird tuning
+ggplot(mars.fit)
+
+# final model
+mars.fit$bestTune
+
+# coefficient of the MARS model
+coef(mars.fit$finalModel) 
+```
+
+* From the above output, the final model has 16 coefficients, with degree of freedom is 1.
+
+* We observed that variables such as **grad_rate( Graduation rate)** , **f_undergrad(Number of fulltime undergraduates)** and **perc_alumni(Pct. alumni who donate)** with larger absolute value, which means these variable may more likely to change the mean in the response given a one unit change in these predictor.
+
+```{r QuestionC- PDPs plots}
+
+
+# Plot of expend variable
+p1 <- pdp::partial(mars.fit, pred.var = c("expend"), grid.resolution = 10) %>% autoplot()
+
+# Plot of expend and room board variable
+p2 <- pdp::partial(mars.fit, pred.var = c("expend", "room_board"), 
+                   grid.resolution = 10) %>%
+      pdp::plotPartial(levelplot = FALSE, zlab = "yhat", drape = TRUE, 
+                       screen = list(z = 20, x = -60))
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+* Here are two PDPs (Partial Dependence Plot) plots, the left one is with the variable **expend**, and the right side is for **expend** and **rood_board**.
+
+```{r QuestionC-test error}
+set.seed(123)
+
+# Test Error(MSE)
+testdata_x = test_data %>% 
+select(-outstate)
+
+mars.pred <- predict(mars.fit, newdata = testdata_x)
+
+mean((mars.pred  - test_data$outstate)^2)
+
+```
+
+* The test error for MARS model `r mean((mars.pred  - test_data$outstate)^2)`.
 
 
