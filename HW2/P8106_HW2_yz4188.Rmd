@@ -53,7 +53,7 @@ y <- train_data$outstate
 \newpage
 
 # Question A
-Fit smoothing spline models using perc.alumni as the only predictor of Outstate for a range of degrees of freedom, as well as the degree of freedom obtained by generalized cross-validation, and plot the resulting fits. Describe the results obtained.
+### Fit smoothing spline models using perc.alumni as the only predictor of Outstate for a range of degrees of freedom, as well as the degree of freedom obtained by generalized cross-validation, and plot the resulting fits. Describe the results obtained.
 
 ```{r QuestionA}
 
@@ -87,7 +87,7 @@ geom_line(aes(x = perc_alumni.grid, y = pred), data = pred.ss.df,
 
 
 # Question B
-Fit a generalized additive model (GAM) using all the predictors. Does your GAM model include all the predictors? Plot the results and explain your findings. Report the test error.
+### Fit a generalized additive model (GAM) using all the predictors. Does your GAM model include all the predictors? Plot the results and explain your findings. Report the test error.
 
 ```{r QuestionB-1}
 
@@ -115,11 +115,11 @@ set.seed(123)
 summary(gam.fit)
 
 # Plot of each predictor versus the outcome variable (outstate)
-plot(gam.fit$finalModel, pages = 6)
+plot(gam.fit$finalModel, pages = 4)
 
 ```
 
-* According to p-value, for some predictors, there is not sufficient evidence in the data to conclude they are significant association with the outcome variable outstate at the 5% significance level, like **terminal(Pct. of faculty with terminal degree)**, **ph_d(ct. of faculty with Ph.D.’s)**,**top25perc(Pct. new students from top 25% of H.S. class)**, and **p_undergrad(Number of parttime undergraduates)**. However, some of the predictors seems to have linear relationship with the model, such as **grad_rate( Graduation rate)** and **personal(Estimated personal spending)**.
+* According to p-value, for some predictors, there is not sufficient evidence in the data to conclude they are significant association with the outcome variable outstate at the 5% significance level, like **terminal**, **ph_d**,**top25perc**, and **p_undergrad**. However, some of the predictors seems to have linear relationship with the model, such as **grad_rate** and **personal**.
 
 * The Deviance explained by the model is 83.7%, and the adjusted R-Square is 81.5%, that showing a high level of correlation. The GAM model fits the data pretty well.
 
@@ -142,7 +142,7 @@ mean((gam.pred - test_data$outstate)^2)
 
 # Question C
 
-Train a multivariate adaptive regression spline (MARS) model using all the predictors. Report the final model. Present the partial dependence plot of an arbitrary predictor in your final model. Report the test error.
+### Train a multivariate adaptive regression spline (MARS) model using all the predictors. Report the final model. Present the partial dependence plot of an arbitrary predictor in your final model. Report the test error.
 
 ```{r QuestionC-MARS model}
 mars_grid <- expand.grid(degree = 1:3, 
@@ -166,7 +166,7 @@ coef(mars.fit$finalModel)
 
 * From the above output, the final model has 16 coefficients, with degree of freedom is 1.
 
-* We observed that variables such as **grad_rate( Graduation rate)** , **f_undergrad(Number of fulltime undergraduates)** and **perc_alumni(Pct. alumni who donate)** with larger absolute value, which means these variable may more likely to change the mean in the response given a one unit change in these predictor.
+* We observed that variables such as **grad_rate** , **f_undergrad** and **perc_alumni** with larger absolute value, which means these variable may more likely to change the mean in the response given a one unit change in these predictor.
 
 ```{r QuestionC- PDPs plots}
 
@@ -183,7 +183,7 @@ p2 <- pdp::partial(mars.fit, pred.var = c("expend", "room_board"),
 grid.arrange(p1, p2, ncol = 2)
 ```
 
-* Here are two PDPs (Partial Dependence Plot) plots, the left one is with the variable **expend**, and the right side is for **expend** and **rood_board**.
+* Here are two PDPs (Partial Dependence Plot) plots, the left one is with the variable **expend**, and the right side is for **expend** and **room_board**.
 
 ```{r QuestionC-test error}
 set.seed(123)
@@ -199,5 +199,26 @@ mean((mars.pred  - test_data$outstate)^2)
 ```
 
 * The test error for MARS model `r mean((mars.pred  - test_data$outstate)^2)`.
+
+
+# Question D
+### In this data example, do you prefer the use of MARS model over a linear model when predicting the out-of-state tuition? Why? For general applications, do you think MARS is a better approach compared to a linear model?
+
+```{r Question D}
+
+set.seed(123)
+
+bwplot(resamples(list(mars = mars.fit,
+               gam = gam.fit)), metric = "RMSE")
+
+```
+
+
+* As for response predicting model, we would choose the model with the lowest error on predicting the test set. From the above questions,  we see that Test Error of GAM model is `r mean((gam.pred - test_data$outstate)^2)` and Test Error of MARS model is `r mean((mars.pred  - test_data$outstate)^2)`. MARS model got the smaller test error.Besides, from the above plot for RMSE, which is the root of MSE. We prefer the model with lower values of RMSE since this indicate better fit. As we can see that MARS model is with lower values. In this circumstances, I would prefer the use of MARS model over a linear model when predicting the out-of-state tuition. 
+
+* For general applications, I believe MARS model would be a better approach compared to a linear model. 
+The pros of linear regression is its simplicity, as it assumes a linear relationship between inputs and outputs. The interaction between metrics in the real-world is often non-linear, which means that simple linear regression cannot always give us a good approximation of outputs given the inputs. MARS is to imagine it as an ensemble of linear functions joined together by one or more hinge functions. What is more, if we go up in dimensions and build and compare models using 2 independent variables, multiple linear regression creates a prediction plane that looks like a flat sheet of paper. Meanwhile, MARS takes that sheet of paper and folds it in a few places using hinge functions, enabling a better fit to the data.
+
+
 
 
