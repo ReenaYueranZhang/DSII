@@ -101,7 +101,8 @@ confusionMatrix(data = fct_rev(as.factor(test.pred)), # Reverse order of factor 
 
 ```
 
-```{r-ROC plot}
+```{r QuestionA-ROC plot}
+
 set.seed(1234)
 roc.glm <- roc(auto$mpg_cat[-rowTrain], test.pred.prob)
 plot(roc.glm, legacy.axes = TRUE, print.auc = TRUE)
@@ -113,7 +114,7 @@ plot(smooth(roc.glm), col = 4, add = TRUE)
 * The confusion matrix also tells us that our no information rate is 50%, which means that if we had no information and made the same class prediction for all observations, our model would be 50% accurate.
 * Our p-value is <2e-16 (close to 0) tells us that our accuracy is statistically significantly better than our no information rate. 
 * The model' sensitivity is 91.38% (true detected positives out of all actual positives);Specificity is 84.48% (true detected negatives out of all actual negatives);positive predictive value is 85.48% (true detected positives out of all predicted positives); negative predictive value of 90.74% (true detected negatives out of all predicted negatives). Our sensitivity and specificity average is 87.93%, which is our balanced accuracy. Our kappa is 0.7586, indicates pretty good reliability.
-** Another important metric that measures the overall performance of a classifier is the “Area Under ROC” (AUC) value.We also made this plot and observe the area measured under the ROC curve. A higher value of AUC represents a better classifier. The AUC of the practical learner above is 90% (from the plot we know AUC=0.957) which is a pretty good score.
+* Another important metric that measures the overall performance of a classifier is the “Area Under ROC” (AUC) value.We also made this plot and observe the area measured under the ROC curve. A higher value of AUC represents a better classifier. The AUC of the practical learner above is 90% (from the plot we know AUC=0.957) which is a pretty good score.
 
 # Question B
 ### Train a multivariate adaptive regression spline (MARS) model using the training data.
@@ -243,4 +244,4 @@ pROC::ggroc(list(roc.lda), legacy.axes = TRUE) +
   geom_abline(intercept = 0, slope = 1, color = "gold")
 ```
  
- * The LDA model has a misclassification rate of `1 - 0.8534 = 14.7%` , and when we apply threshold of 0.5 probability, and observe the area measured under the ROC curve. A higher value of AUC represents a better classifier. The AUC of the practical learner above is 90% (from the plot we know AUC=0.94) which is a pretty good score.
+ * The LDA model has a misclassification rate of `1 - 0.8534 = 14.7%` , and when we apply threshold of 0.5 probability, and observe the area measured under the ROC curve(AUC). A higher value of AUC represents a better classifier. The AUC of the practical learner above is 90% (from the plot we know AUC=0.94) which is a pretty good score.
