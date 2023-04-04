@@ -1,0 +1,232 @@
+---
+title: "P8106 Data ScienceII Midterm EDA"
+author: "Yueran Zhang (yz4188)"
+date: '2023-03-26'
+output:
+  pdf_document:
+    toc_depth: 2
+  html_document:
+    toc_depth: '2'
+  chunk_output_type: inline
+---
+```{r R package,echo = FALSE, message = FALSE, results='hide', warning=FALSE}
+library(repr)
+library(ggplot2)
+library(dplyr)
+```
+
+### Loading in the Data
+```{r Data Import,echo = TRUE, message = FALSE, results='hide', warning=FALSE}
+# Data Import
+# Set as my last four digits of your UNI 
+set.seed(4188)
+
+# Load objects into my workspace
+setwd("/Users/yueranzhang/Desktop/DSII/Midterm/Dataset")
+load(file = "recovery.RData")
+
+# Generate a random sample of 2000 participants
+dat <- dat[sample(1:10000, 2000),]
+
+
+```
+
+```{r head,echo = TRUE, message = FALSE, warning=FALSE}
+head(dat)
+```
+
+### Cleaning the Data
+Though there seems to be many numeric variables, not all of them are true numerical variables. Some are displayed as numbers but are really factors. These variables will be converted from int to factor.
+```{r clean data, echo = TRUE, message = FALSE, warning=FALSE}
+set.seed(4188)
+
+to_be_factors <- c("gender", "hypertension", "diabetes", "vaccine", "severity", "study")
+dat[to_be_factors] <- lapply(dat[to_be_factors], factor)
+
+dat$gender <- recode(dat$gender, '1' = 'Male', 
+                                 '0' = "Female")
+
+dat$race <- recode(dat$race, '1' = 'White', 
+                             '2' = "Asian",
+                             '3' = 'Black',
+                             '4' = 'Hispanic')
+
+dat$smoking <- recode(dat$smoking, '0' = 'Never smoked',
+                                   '1' = 'Former smoke',
+                                   '2' = 'Current smoker')
+
+dat$hypertension <- recode(dat$hypertension, '0' = 'No',
+                                             '1' = 'Yes') 
+
+dat$diabetes <- recode(dat$diabetes, '0' = 'No',
+                                     '1' = 'Yes')
+
+dat$vaccine <- recode(dat$vaccine, '0' = 'Not vaccinated',
+                                   '1' = 'Vaccinated')
+
+dat$severity <- recode(dat$severity, '0' = "Not severe",
+                                      '1' = 'Severe')
+
+
+# count the missing values by column wise
+print("Count of missing values by column wise")
+sapply(dat, function(x) sum(is.na(x)))
+
+str(dat)
+```
+
+
+```{r # of variables,echo = TRUE, message = FALSE, warning=FALSE}
+set.seed(4188)
+dat <- subset(dat, select = c(2:16))
+dim(dat)
+cat(paste("Number of Numeric Variables: ", sum(sapply(dat, is.numeric))))
+cat(paste("\nNumber of Categorical Variables: ", sum(sapply(dat, is.factor))))
+```
+
+Order and ID variables do not convey any useful information and is dropped. There are **2000 observations**  and **14 variables**. 1 of the 14 variables include **recovery time**, which is the target variable.
+
+\newpage
+### Looking at the Target Feature
+
+```{r target variables, ,echo = TRUE, message = FALSE, warning=FALSE}
+cat(paste("Mean recovery time: ", round(mean(dat$recovery_time))))
+cat(paste("\nMedian recovery time: ", median(dat$recovery_time)))
+cat(paste("\nMax recovery time: ", max(dat$recovery_time)))
+cat(paste("\nMin recovery time: ", min(dat$recovery_time)))
+```
+```{r target variables plots,echo = TRUE, message = FALSE, warning=FALSE}
+
+set.seed(4188)
+options(repr.plot.height = 4.5, repr.plot.width = 8)
+options(scipen=10000)
+
+hist(dat$recovery_time, col = 'light blue', main = 'Time from COVID-19 infection to recovery in days', xlab = 'recovery time', breaks = 75, xlim = c(0,380), freq = FALSE)
+abline(v = mean(dat$recovery_time), col = 'red', lty = 2, lwd = 3)
+abline(v = median(dat$recovery_time), col = 'dark blue', lty = 2, lwd = 3)
+lines(density(dat$recovery_time), col = 'black', lwd = 2)
+```
+
+The histogram of the recovery time is a little bit of right skewed. The mean is higher than the median. There are also a good number of outliers.
+
+\newpage
+### Looking at Other Features
+
+In order to predict the recovery time, let's look at how other variables influence recovery time.
+
+What study group were the participants from?
+```{r age, echo = TRUE, message = FALSE, warning=FALSE}
+set.seed(4188)
+
+table(dat$study)
+theme_set(theme_classic())
+options(repr.plot.height = 4, repr.plot.width = 8)
+ggplot(as.data.frame.table(table(dat$study)), aes(Var1, Freq)) + 
+    geom_bar(stat = "identity", width = 0.5, fill = "plum3") + 
+    labs(title = "Study group", subtitle = "The study (A/B/C) that the participant belongs to") +
+    theme(axis.text.x = element_text(angle=65, vjust=0.6))
+```
+From the above plot, we can know that most participants are from the Study B, around 1250 out of 2000(62.5%). People from study A is around 350 and  from study C is around 400.
+
+What was the condition of  the participants' severity of COVID-19 infection?
+```{r serverity, echo = TRUE, message = FALSE, warning=FALSE}
+
+table(dat$severity)
+options(repr.plot.height = 3, repr.plot.width = 7)
+ggplot(as.data.frame.table(table(dat$severity)), aes(Var1, Freq)) + 
+    geom_bar(stat = "identity", width = 0.5, fill = "palegreen3") + 
+    labs(title = "Overall Conditions", subtitle = "Not severe/Severe ")
+     
+```
+From the above information, to our relief, we know that most participants are not severe condition.
+
+
+\newpage
+### How Other Features Compare with Recovery time?
+
+
+### Numerical Features
+
+Let's look at a few key numerical features at once and see how they correlate with Recovery time.
+
+```{r recovery time,echo = TRUE, message = FALSE, warning=FALSE}
+options(repr.plot.height = 7, repr.plot.width = 7)
+num_vars <- c("height", "weight", "bmi", "SBP", "LDL", "recovery_time") 
+plot(dat[, num_vars]) 
+
+```
+Most variables are little correlated with one another. Notably, **weight and bmi** seem positively correlated with recovery time; **height** seems negatively correlated with recovery time, and **SBP and LDL** seem no significant correlated with recovery time.
+
+\newpage
+### Categorical Features
+
+ Let's compare race with the time from COVID-19 infection to recovery in days.
+ 
+```{r race,echo = TRUE, message = FALSE, warning=FALSE}
+
+options(repr.plot.height = 4, repr.plot.width = 5)
+ggplot(dat, aes(x=race, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "slategray2") +
+    labs(title = "Average Recovery Time of Different Races")
+
+```
+ 
+From the graph, we can tell that there is no significant difference of recovery time among various race.The average of recovery days is more than 40 days. People self-identified as Asian tend to have the longest average recovery time and self-identified as American African tend to have the average shortest recovery time.
+
+\newpage
+Let's also look at how vaccination condition relate to recovery time.
+
+```{r vaccination,echo = TRUE, message = FALSE, warning=FALSE}
+    
+options(repr.plot.height = 4, repr.plot.width = 7)
+ggplot(dat, aes(x=vaccine, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "salmon") +
+    labs(title = "Average Recovery Time of Different Vaccination Condition") +
+    theme(axis.text.x = element_text(angle=90, vjust=0.6))
+```
+From the graph, we can assume that vaccine is a related factors with recovery time. Since people in the not vaccined group(around 50 days of recovery time) have longer recovery time than the people in vaccined group (around 40 days of recovery time).
+
+\newpage
+Which gender cost more days to recover?
+```{r gender,echo = TRUE, message = FALSE, warning=FALSE}
+
+ggplot(dat, aes(x=gender, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "rosybrown") +
+    labs(title = "Average Recovery Time of Different Gender")
+```
+From the above graph, it seems that female may need longer time to recover after COVID-19 infection. We can assume that gender tends to influence recovery time.
+
+\newpage
+What about the hypertension? Would this variable affect the target?
+
+```{r hypertension , echo = TRUE, message = FALSE, warning=FALSE}
+
+ggplot(dat, aes(x=hypertension, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "bisque2") +
+    labs(title = "Average Recovery Time of Different Hypertension Condition")
+```
+
+From the above graph, people with hypertension need more time to recover after COVID-19 infection.
+
+\newpage
+Let's focus on smoking status this time!
+```{r smoking status , echo = TRUE, message = FALSE, warning=FALSE}
+
+ggplot(dat, aes(x=smoking, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "darkorange") +
+    labs(title = "Average Recovery Time of Different Smoking Status")
+```
+If people never smoke, they tend to less recovery time(around 40 days). People with smoking history or still are smokers are more likely to need more time to recovery from COVID-19.
+
+\newpage
+The last one.. I promise!! (For variable 'diabetes')
+
+```{r diabetes, echo = TRUE, message = FALSE, warning=FALSE}
+
+ggplot(dat, aes(x=diabetes, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "deeppink2") +
+    labs(title = "Average Recovery Time of Diabetes Condition")
+```
+There seems no significant difference of recovery time for people with or without diabetes.
+
+* In conclusion, from these different graphs, we can determine which features tend to influence recovery time.

@@ -1,0 +1,662 @@
+---
+title: "P8106 Data ScienceII Midterm"
+author: "Yueran Zhang (yz4188)"
+date: '2023-03-26'
+output:
+  pdf_document:
+    latex_engine: xelatex
+    toc_depth: 2
+  html_document:
+    toc_depth: '2'
+editor_options: 
+  chunk_output_type: inline
+---
+
+
+```{r R package,echo = FALSE, message = FALSE, results='hide', warning=FALSE}
+# R package
+library(repr)
+library(ggplot2)
+library(dplyr)
+library(tidyverse)
+library(caret)
+library(mgcv)
+library(earth)
+library(caret)
+library(glmnet)
+library(pls)
+library(MASS)
+library(grid)
+library(GGally)
+library(pdp)
+library(gridExtra)
+```
+
+# Introduction
+
+## Background
+The COVID-19 pandemic had a significant impact on global health. It is The Covid-19 pandemic had a significant impact on global health. It is one of many mysteries about long Covid: What is the recovery timeline? Are some people more likely than others to experience long coronavirus infections? Long Covid can be a debilitating illness that affects multiple organ systems, with over 200 identified symptoms(Davis et al., 2023). The understanding of important risk factors allows people to correlate long Covid with various determinants such as pre-existing characteristics, medical records, genetics, and lifestyle. According to CDC, some groups of people may be affected more by Post-Covid Conditions, such as people who have experienced more severe COVID-19 illness, especially those who hospitalized, or people who did not get a Covid-19 vaccine(CDC, 2021). Therefore, predicting recovery time from Covid-19 illness and identifying important risk factors for long recovery times are crucial for recovery from Covid-19.
+
+The study was designed to combine three existing cohort studies that have been tracking participants for several years. The study collects recovery information through questionnaires and medical records, and leverages existing data on personal characteristics prior to the pandemic. 
+
+```{r Data Import,echo = FALSE, message = FALSE, results='hide', warning=FALSE}
+# Data Import
+# Set as my last four digits of your UNI 
+set.seed(4188)
+
+# Load objects into my work space
+load(file = "/Users/yueranzhang/Desktop/DSII/Midterm/Dataset/recovery.RData")
+
+# Generate a random sample of 2000 participants
+dat <- dat[sample(1:10000, 2000),] %>% 
+relocate(age, height, weight, bmi,SBP, LDL,.after = last_col())
+
+         
+
+# Split the dataset into two parts: training data (70%) and test data (30%).
+rowTrain <- createDataPartition(y = dat$recovery_time,
+                                p = 0.7,
+                                list = FALSE) 
+
+```
+
+
+## Data Descprtion
+
+The dataset is "recovery.RData" that consists of 10000 participants. We generate a random sample of 2,000 participants and create reproducible results by using "set.seed(4188- as my uni numbers)function". ID variables do not convey any useful information and is dropped.The dataset now contains 2000 observations and 15 variables, including pre-existing characteristics(eg.age, gender,BMI, height, weight), medical records(eg.diabetes history,hypertension and vaccination condition), and lifestyle(eg.smoking status). 1 of the 15 variables include recovery time, which is the target variable. The predictors are as following:
+
+* Gender (gender)                     1 = Male, 0 = Female
+* Race/ethnicity (race)               1 = White, 2 = Asian, 3 = Black, 4 = Hispanic
+* Smoking (smoking) 	                Smoking status; 0 = Never smoked, 1 = Former smoker, 2 = Current smoker
+* Height (height)                     Height (in centimeters)
+* Weight (weight)                     Weight (in kilograms)
+* BMI (bmi)                           Body Mass Index; BMI = weight (in kilograms) / height (in meters) squared
+* Hypertension (hypertension)         0 = No, 1 = Yes
+* Diabetes (diabetes)                 0 = No, 1 = Yes
+* Systolic blood pressure (SBP)       Systolic blood pressure (in mm/Hg)
+* LDL cholesterol (LDL)               LDL (low-density lipoprotein) cholesterol (in mg/dL)
+* Vaccination status at the time of infection (vaccine) 0 = Not vaccinated, 1 = Vaccinated
+* Severity of COVID-19 infection (severity) 0 = Not severe, 1= Severe
+* Study (study)                       The study (A/B/C) that the participant belongs to
+* Time to recovery (tt_recovery_time) Time from COVID-19 infection to recovery in days
+
+## Cleaning the Data
+Though there seems to be many numeric/integer variables, not all of them are true numerical variables. Some are displayed as numbers but are really factors("gender", "hypertension", "diabetes", "vaccine", "severity", "study"). For example, for "gender" variable, we use 'number 1' to represent male, so the 'number 1' has no mathematics meaning, only for labeling categories. These variables will be converted from int to factor. Now we have 2,000 observations' data with 8 categorical(factor) variables, 7 numerical variables. After checking, there is no null value or missing data in our dataset.
+
+For training and testing purpose, we  randomly divided the dataset of 2,000 particicants into two subsets: training set (70%) and the testing set (30%). The exact same training and testing set was used for the training of all models to ensure the reproducibility of the process.  
+
+```{r clean data,echo = FALSE, message = FALSE, results='hide', warning=FALSE}
+
+set.seed(4188)
+
+to_be_factors <- c("gender", "hypertension", "diabetes", "vaccine", "severity", "study")
+dat[to_be_factors] <- lapply(dat[to_be_factors], factor)
+
+dat1 <- dat  # Create copy of data
+
+dat1$gender <- recode(dat1$gender, '1' = 'Male', 
+                                 '0' = "Female")
+
+dat1$race <- recode(dat1$race, '1' = 'White', 
+                             '2' = "Asian",
+                             '3' = 'Black',
+                             '4' = 'Hispanic')
+
+dat1$smoking <- recode(dat1$smoking, '0' = 'Never smoked',
+                                   '1' = 'Former smoke',
+                                   '2' = 'Current smoker')
+
+dat1$hypertension <- recode(dat1$hypertension, '0' = 'No',
+                                             '1' = 'Yes') 
+
+dat1$diabetes <- recode(dat1$diabetes, '0' = 'No',
+                                     '1' = 'Yes')
+
+dat1$vaccine <- recode(dat1$vaccine, '0' = 'Not vaccinated',
+                                   '1' = 'Vaccinated')
+
+dat1$severity <- recode(dat1$severity, '0' = "Not severe",
+                                      '1' = 'Severe')
+
+# count the missing values by column wise
+print("Count of missing values by column wise")
+sapply(dat, function(x) sum(is.na(x)))
+
+str(dat)
+
+```
+
+```{r # of variables,echo = FALSE, message = FALSE, results='hide', warning=FALSE}
+set.seed(4188)
+dat <- subset(dat, select = c(2:16))
+dim(dat)
+
+cat(paste("Number of Numeric Variables: ", sum(sapply(dat, is.numeric))))
+cat(paste("\nNumber of Categorical Variables: ", sum(sapply(dat, is.factor))))
+
+```
+```{r Data Summary,echo = FALSE, message = FALSE,warning=FALSE }
+dat %>%
+skimr::skim()%>%
+knitr::knit_print()
+
+```
+
+
+```{r Training&Test,echo = FALSE, message = FALSE, results='hide', warning=FALSE}
+# training data
+training.data <- dat[rowTrain, ]
+## matrix of predictors
+x <- model.matrix(recovery_time~.,training.data)[,-1]
+## vector of response
+y <- dat$recovery_time[rowTrain ]
+# test data
+test.data <- dat[-rowTrain, ]
+## matrix of predictors
+x2 <- model.matrix(recovery_time~.,test.data)[,-1]
+## vector of response
+y2 <- dat$recovery_time[-rowTrain]
+```
+
+# Exploratory Data Analysis
+
+## Looking at the Target Feature
+
+```{r target variables,echo = FALSE, message = FALSE, warning=FALSE}
+
+set.seed(4188)
+
+cat(paste("Mean recovery time: ", round(mean(dat$recovery_time)))) 
+cat(paste("\nMedian recovery time: ", median(dat$recovery_time)))  
+cat(paste("\nMax recovery time: ", max(dat$recovery_time))) 
+cat(paste("\nMin recovery time: ", min(dat$recovery_time)))
+
+options(repr.plot.height = 4.5, repr.plot.width = 8)
+options(scipen=10000)
+
+hist(dat$recovery_time, col = 'light blue', main = 'Time from COVID-19 infection to recovery in days', xlab = 'recovery time', breaks = 75, xlim = c(0,380), freq = FALSE)
+abline(v = mean(dat$recovery_time), col = 'red', lty = 2, lwd = 3)
+abline(v = median(dat$recovery_time), col = 'dark blue', lty = 2, lwd = 3)
+lines(density(dat$recovery_time), col = 'black', lwd = 2)
+```
+The average mean recovery time from Covid is 43 days; median recovery time is 39 days; the longest recovery process would costs 365 days(1 year); and the minimum days of recovery is only 3 days.The histogram of the recovery time is a little bit of right skewed. The mean is higher than the median. There are also a good number of outliers.
+
+## Other Features Compare with recovery time
+
+### Numerical Features
+
+```{r numerical,echo = FALSE, message = FALSE, warning=FALSE}
+
+theme1 <- trellis.par.get()
+theme1$plot.symbol$col <- rgb(.4, .7, .9, .5)
+theme1$plot.symbol$pch <- 16
+theme1$plot.line$col <- rgb(.8, .1, .1, 1)
+theme1$plot.line$lwd <- 2
+theme1$strip.background$col <- rgb(.0, .2, .6, .2)
+trellis.par.set(theme1)
+
+num_vars <- c("age","height", "weight", "bmi", "SBP", "LDL") 
+
+featurePlot(x =  dat[, num_vars],
+            y = dat$recovery_time,
+            plot = "scatter",
+            span = .5,
+            main = "Figure 1. Numercial Varibables - Scatter Plots", "Measure",
+            type = c("p", "smooth"))
+
+```
+```{r numerical w/ each other,echo = FALSE, message = FALSE, warning=FALSE}
+options(repr.plot.height = 7, repr.plot.width = 7)
+num_vars <- c("age", "height", "weight", "bmi", "SBP", "LDL","recovery_time")
+plot(dat[, num_vars],
+     main = "Figure2. Correlations between numercial variables")
+```
+
+As observed the numerical variables plots, we can assume that,
+
+* **BMI** - Participants BMI tends to curvilinear(U-shaped) correlated with the recovery time. If participants starts BMI with 20-30, then increasing the BMI value would decrease the recovery time(Minimum recovery time is BMI=19.7). However once participants pass the BMI 30 range and start getting to longer recovery time(Maximum recovery time is BMI=39.4), increasing the BMI value would increase the recovery time. The average shorter recovery time falls into BMI 25-30.
+
+* **SBP** - Participants' Systolic blood pressure value seems slightly positive statistically associated with recovery time. There is a slightly upward sloping line, that's to say, people with lower SBP measurement value seems to have shorter recovery time than people with high SBP value.
+
+* **LDL** - Participants' LDL cholesterol value seems no significant statistically correlated with recovery time. We observe a nearly horizon linear line, and we cannot say that people with minimum LDL value has huge difference recovery time with people had the maximum 
+LDL value.
+
+* **Age** - Participants' age seems slightly positive statistically associated with recovery time. From the plot, we see a slightly upward sloping line, so older people may need more time to recover from Covid compared younger people.
+
+* **Height** -  Participants' height seems slightly negative statistically associated with recovery time. It shows that a slightly downward sloping line, indicating that much shorter people may need more recovery time, but taller people need less time to recovery from Covid. 
+
+* **Weight** - Participants weight is slightly curvilinear(U-shaped) correlated with the recovery time. If people within 60-80 kgs, then increasing the weight would have less the recovery time. However if participants pass 80 kgs range and start needing longer recovery time, increasing in weight value would increase the recovery time after people.
+
+* Finally, most variables are a little bit correlated with one another. As we can tell that **age and BMI** value are significantly negative correlated. **weight and BMI** seems positive correlated, that is we observed as above that they seems both have an 'u-shaped' correlated with recovery time.
+
+
+### Categorical Features
+
+```{r Categorical,echo = FALSE, message = FALSE, warning=FALSE, results='hide',fig.width = 9, fig.height = 4}
+
+plot.race = dat1 %>% 
+  ggplot(aes(x=race, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "slategray2") +theme_classic() 
+    labs(title = "Average Recovery Time of Different Races")
+
+plot.vac = dat1 %>% 
+ggplot( aes(x=vaccine, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "salmon") +theme_classic() 
+    labs(title = "Average Recovery Time of Different Vaccination Condition") +
+    theme(axis.text.x = element_text(angle=90, vjust=0.6))
+
+plot.gender = dat1 %>% 
+ggplot(aes(x=gender, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "rosybrown") +theme_classic() 
+    labs(title = "Average Recovery Time of Different Gender")
+
+plot.hp = dat1 %>% 
+ggplot(aes(x=hypertension, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "bisque2") +theme_classic() 
+    labs(title = "Average Recovery Time of Different Hypertension Condition")
+
+plot.smk = dat1 %>% 
+ggplot( aes(x=smoking, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "darkorange") +theme_classic() 
+    labs(title = "Average Recovery Time of Different Smoking Status")
+
+plot.diabetes = dat1 %>% 
+ggplot( aes(x=diabetes, y=recovery_time)) + 
+    stat_summary(fun.y="mean", geom="bar", fill = "lightgrey") +theme_classic() 
+    labs(title = "Average Recovery Time of Diabetes Condition")
+
+plot.study = dat1 %>% 
+ggplot( aes(x=study, y=recovery_time)) + 
+stat_summary(fun.y="mean", geom="bar", fill = "plum3") +theme_classic() 
+labs(title = "Average Recovery Time of Different Study Groups")
+
+plot.sv = dat1 %>% 
+ggplot( aes(x=severity, y=recovery_time)) + 
+stat_summary(fun.y="mean", geom="bar", fill = "palegreen3") +theme_classic() 
+labs(title = "Average Recovery Time of Different Severity Condition")
+
+
+```
+
+```{r cat-graphs,echo = FALSE, message = FALSE, warning=FALSE,fig.width = 9, fig.height = 4}
+grid.arrange(plot.race, plot.vac,plot.smk, plot.gender, plot.hp, plot.diabetes,plot.study,plot.sv, ncol= 3, top = textGrob("Figure3. Visualizing correlations between categorical variables ",gp=gpar(fontsize=15,font=1))) 
+```
+
+ From the above categorical graphs, we can assume that,
+
+* **Race** - There is no significant difference of recovery time among various race.The average of recovery days is more than 40 days. However, people self-identified as Asian tend to have the longest average recovery time and self-identified as American African tend to have the average shortest recovery time.
+
+* **Vaccine** - From the graph, we can assume that vaccine is a related factors with recovery time. Since people in the not vaccined group(around 50 days of recovery time) have longer recovery time than the people in vaccined group (around 40 days of recovery time).
+
+* **Smoke** - It seems that smoking status is correlated with recovery time. There is difference of recovery time among among disparate smoking status.If people never smoke, they tend to less recovery time(around 40 days). People with smoking history or still are smokers are more likely to need more time to recovery from COVID-19.
+
+* **Gender** - It seems that female may need longer time to recover after COVID-19 infection. We can assume that gender tends to influence recovery time.
+
+* **hypertension** - There is a positive association between participants hypertension status and recovery time, as people with hypertension need more time to recover after COVID-19 infection.
+
+* **diabetes** - From the diabetes variable, it is suprisingly that people without diabetes would be need more time to recovery while people with diabetes seem to less recovery time after Covid infection.  
+
+* **Study** - People from Study Group B would have a longer recovery time compared participants from Group A or Group C.
+
+* **Severity** - From the above information, we can assume that severity condition is a related factors with recovery time. People in severe condition would be likely more time to recover from Covid than people not in severe condition.
+
+
+# Modeling
+
+## Methods
+
+Looking back our target outcome is a continuous variable(recovery time from COVID-19 infection), we would first start with regression model,as the most simple and popular technique for predicting a continuous variable.As we only have 14 variables,all these variables in the data will be set to fit the model. From the above EDA, our dataset contains some correlated predictors, where we could perform Principal components regression (PCR) and partial least squares regression((PLS).This technique constructs a set of linear combinations of the inputs for regression. In order to to simplify a large multivariate model is to use penalized regression, we would uselasso regression and Elastic net model. For some variables, the relationship between the target outcome and the predictor variables is not linear.In these situations, we need to build a non-linear regression, like Generalized additive model (GAM) and Multivariate Adaptive Regression Splines(MARS). 
+
+One of the most robust and popular approach for estimating a model performance is k-fold cross-validation, and note that, the best model is the model that has the lowest cross-validation error, RMSE. In our study, we use 15-fold cross-validation repeated 5 times.
+
+
+```{r correlation,echo = FALSE, message = FALSE, warning=FALSE}
+p_correlation = dat %>%
+dplyr::select(-recovery_time) %>%
+ggcorr(label=TRUE, hjust = 0.99, layout.exp = 1, label_size = 3, label_round = 2)
+p_correlation
+```
+It shows that **weight and BMI**, **height and weight**, **height and BMI**, **age and SBP**, **age and LDL** and **LDL and SBP** are correlated. In this situation, there might be an interaction effect between some predictors.
+
+1. Multiple linear regression
+
+In this section, we’ll build a multiple regression model to predict recovery time based on the other participants' characteristics variables, such as gender, race, smoking status and so on. Once identified the model, we continue the diagnostic by checking how well the model fits the data.We use the method  = 'lm' syntax for linear regression models. 
+
+The Residual standard error (RSE) = 24.07, meaning that the observed recovery time deviate from the predicted recovery time by approximately 24.07 units in average. This corresponds to an error rate of 24.07/mean(training.data$recovery_time) = 24.07/42.93581 = 56.06%, which is pretty high. The Adjusted R-square value in the summary output is a correction for the number of 15 variables included in the predictive model. R-Squared(RSq) is 0.2524,the regression model did not explain much of the variability in the outcome. 
+
+```{r linear model,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+set.seed(4188)
+
+ctrl <- trainControl(method = "repeatedcv", number = 15, repeats = 5)
+
+model.lm <- train(recovery_time ~ .,
+                  data = training.data,
+                   method = "lm",
+                   trControl = ctrl)
+
+# Summary
+model.lm$finalModel
+
+summary(model.lm$finalModel)
+
+24.07/mean(training.data$recovery_time) 
+
+#RMSE
+lm.pred <- predict(model.lm, newdata = test.data)
+lm.rmse <- sqrt(mean((lm.pred - test.data$recovery_time)^2))
+lm.rmse
+
+```
+
+2. Penalized Regression
+
+The standard linear model performs poorly in this situation.A better alternative is the penalized regression allowing to create a linear regression model that is penalized.This is also known as shrinkage or regularization methods.The consequence of imposing this penalty, is to reduce (i.e. shrink) the coefficient values towards zero. This allows the less contributive variables to have a coefficient close to zero or equal zero.In this section, we will use penalized regression methods, including ridge regression, lasso regression and elastic net regression. 
+
+1) Ridge Regression
+
+Ridge regression shrinks the regression coefficients, so that variables, with minor contribution to the outcome, have their coefficients close to zero.The shrinkage of the coefficients is achieved by penalizing the regression model with a penalty term called L2-norm, which is the sum of the squared coefficients.Alpha=0 the ridge penalty.
+The output shows that the RMSE and R-squared values for the ridge regression model on the training data are 27.414 and 15.57%, respectively. It seems that no improvement from linear model or we say that even worse. Let's move on to the lasso model.
+
+```{r Ridge regression, echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+
+set.seed(4188)
+
+#Setup a grid range of lambda values:
+
+
+# Build the model
+model.ridge <- train( x, y,
+                method = "glmnet",
+                trControl = ctrl,
+                preProc = c("center", "scale"),
+               tuneGrid = expand.grid(alpha = 0,
+                                      lambda = exp(seq(10, -3, length = 70)))
+               )             
+plot(model.ridge, xTrans = log)
+
+# Model coefficients
+coef(model.ridge$finalModel, s = model.ridge$bestTune$lambda)
+
+
+# Make predictions on the test data
+ridge.pred <- model.ridge %>% 
+predict(x2) %>%
+as.vector()
+
+# Model performance metrics
+ridge.rmse = RMSE(ridge.pred, test.data$recovery_time)
+ridge.rmse
+ridge.Rsquare =  caret::R2(ridge.pred, test.data$recovery_time)
+ridge.Rsquare 
+
+```
+
+2) Lasso Model
+
+One disadvantage of the ridge regression is that, it will include all the predictors in the final model.Ridge regression shrinks the coefficients towards zero, but it will not set any of them exactly to zero. The lasso regression is an alternative that overcomes this drawback. It shrinks the regression coefficients toward zero by penalizing the regression model with a penalty term called L1-norm, which is the sum of the absolute coefficients. Alpha=1 is the lasso penalty.The summary output shows the model did not tune alpha because I held it at 1 for lasso regression. The optimal tuning values (at the minimum RMSE) were alpha = 1 and lambda = 0.0012.
+The lasso model finds that the an R-squared of 27.90% with RMSE of 25.37%.There is some improvement in the performance compared with linear model. Next, we we want to explore the Elastic net model.
+
+```{r lasso model,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+set.seed(4188)
+
+# Find the best lambda using cross-validation
+cv <- cv.glmnet(x, y, alpha = 1)
+# Display the best lambda value
+cv$lambda.min
+
+model.lasso <- train(x, y, 
+                   method = "glmnet",
+                   metric = "RMSE",
+                   tuneGrid = expand.grid(alpha = 1,
+                                          lambda = cv$lambda.min),
+                   trControl = ctrl)
+
+#tuning parameters
+model.lasso$bestTune
+
+#Summary
+model.lasso$finalModel
+
+summary(model.lasso$finalModel)
+
+
+#RMSE
+lasso.pred <- predict(model.lasso, newdata = x2)
+lasso.rmse <- sqrt(mean((lasso.pred - test.data$recovery_time)^2))
+lasso.rmse
+
+#R-squared
+Lasso.Rsquare =  caret::R2(lasso.pred, test.data$recovery_time)
+Lasso.Rsquare
+
+```
+3) Elastic Net Model
+
+Elastic Net produces a regression model that is penalized with both the L1-norm and L2-norm. The consequence of this is to effectively shrink coefficients (like in ridge regression) and to set some coefficients to zero (as in LASSO).The caret packages tests a range of possible alpha and lambda values, then selects the best values for lambda and alpha, resulting to a final model that is an elastic net model. The optimal tuning values (at the mininum RMSE) were alpha = 0.0 and lambda = 1, so the mix is 100% ridge, 0% lasso. The lElastic Net shows that the an R-squared of 15.43% with RMSE of 27.437%. 
+```{r Elastic net,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+
+set.seed(4188)
+
+model.enet <- train(x, y, 
+                  method = "glmnet",
+                  tuneGrid = expand.grid(alpha = seq(0, 1, length = 10),
+                                         lambda = exp(seq(0, 5, length = 50))),
+                  metric = "RMSE",
+                  preProcess = c("center", "scale"),
+                  trControl = ctrl)
+
+#tuning parameters
+model.enet$bestTune
+
+#Summary
+model.enet$finalModel
+
+summary(model.enet$finalModel)
+
+# Coefficient of the final model
+coef(model.enet$finalModel, model.enet$bestTune$lambda)
+
+#RMSE
+enet.pred <- predict(model.enet, newdata = x2) 
+enet.rmse <- sqrt(mean((enet.pred  - test.data$recovery_time)^2))
+enet.rmse
+
+#R-squared
+enet.Rsquare = caret::R2(enet.pred, test.data$recovery_time)
+enet.Rsquare
+
+ggplot(model.enet) +
+  labs(title = "Elastic Net Regression Parameter Tuning", x = "lambda")
+
+```
+
+3. Dimension reduction
+
+From above EDA, this data set has multiple correlated predictor variables. Here, we used two well known regression methods based on dimension reduction: Principal Component Regression (PCR) and Partial Least Squares (PLS) regression.
+
+
+1) Principal Component Regression
+
+The principal component regression (PCR) first applies Principal Component Analysis on the data set to summarize the original predictor variables into few new variables also known as principal components (PCs), which are a linear combination of the original data.We simply specify method = "pcr" within train() to perform PCA on all our numeric predictors prior to fitting the model.The PCR model perform 15-fold cross validation repeated 5 times a PCR model tuning the number of principal components to use as predictors from 1-18. 
+
+By controlling for multicollinearity with PCR, we can experience significant improvement in our predictive accuracy compared to the previously obtained linear models (reducing the cross-validated RMSE from about 25 to nearly 23).
+
+```{r PCR,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+set.seed(4188)
+model.pcr <- train(x, y,
+             method = "pcr",
+              tuneGrid = data.frame(ncomp = 1:18), 
+              trControl = ctrl,
+              preProcess = c("center", "scale"))
+
+#Summary
+model.pcr$bestTune
+summary(model.pcr)
+
+model.pcr$results %>%
+  dplyr::filter(ncomp == pull(model.pcr$bestTune))
+
+ggplot(model.pcr)
+
+```
+
+
+2) Partial least squares
+
+Similar to PCR, we can easily fit a PLS model by changing the method argument in train(). We found that the RMSE is also dropped as 23.88 when compared with linear model.
+```{r PLS, echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+set.seed(4188)
+model.pls <- plsr(recovery_time~.,
+                data = dat[rowTrain,],
+                scale = TRUE,
+                validation = "CV")
+
+model.pls <- train(x, y,
+            method = "pls",
+            tuneGrid = data.frame(ncomp = 1:18), 
+            trControl = ctrl,
+              preProcess = c("center", "scale"))
+#Summary
+model.pls$bestTune
+summary(model.pls)
+
+model.pls$results %>%
+  dplyr::filter(ncomp == pull(model.pls$bestTune))
+
+# plot cross-validated RMSE
+ggplot(model.pls)
+```
+
+3. Beyond linearity
+
+1) GAM
+
+We have detected a non-linear relationship in your data, the advantage of GAMs is that they automatically model non-linear relationships so we do not need to manually try out many different transformations on each variable individually. Here, we used train() with method = 'gam'syntax to perform GAM model.GCV is used for smoothness selection in the model; smoothing parameters are chosen to minimise prediction error. 
+
+From the output, it shows that the R-sqaured is 0.417, which is a great improvement from the former models.
+```{r GAM,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
+set.seed(4188)
+model.gam <- train(x, y,
+                 method = "gam",
+                 tuneGrid = data.frame(method = "GCV.Cp", select = c(TRUE)),
+                 trControl = ctrl)
+
+#Summary
+summary(model.gam$finalModel)
+
+#RMSE
+gam.pred <- predict(model.gam, newdata = x2)
+gam.rmse <- sqrt(mean((gam.pred - test.data$recovery_time)^2))
+gam.rmse
+
+regss.gam <- sum((ridge.pred - mean(ridge.pred)) ^ 2)
+tss.gam <- sum((test.data$recovery_time - mean(test.data$recovery_time)) ^ 2)
+
+# Model performance metrics
+gam.rmse = RMSE(gam.pred, test.data$recovery_time)
+gam.rmse
+gam.Rsquare = regss.gam  / tss.gam
+gam.Rsquare 
+
+```
+
+
+2) Multivariate adaptive regression splines (MARS) 
+
+This model is a non-parametric algorithm that creates a piecewise linear model to capture nonlinearities and interactions effects. We use earth() function performs the MARS algorithm.The caret implementation tunes two parameters: nprune and degree. In our model setting, the nprune is between 2 to 19, that is the maximum number of terms in the model. The degree is set 1-3, set as the maximum degree of interaction.
+
+For the MARS model, the best tuning parameters are nprune is 4 and degree is 2.
+
+```{r MARS, echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE }
+set.seed(4188)
+
+mars_grid <- expand.grid(degree = 1:3, 
+                         nprune = 2:19)
+
+model.mars <- train(x, y,
+                  method = "earth",
+                  tuneGrid = mars_grid,
+                  trControl = ctrl)
+
+model.mars$bestTune
+
+#Summary
+summary(model.mars$finalModel)
+
+# Plot
+plot(model.mars, main = "MARS Parameter Tuning")
+
+#RMSE
+model.mars$results %>%
+  filter(nprune == model.mars$bestTune$nprune, degree == model.mars$bestTune$degree)
+
+```
+# Results
+
+## Model comparing
+
+```{r resmapling, echo = FALSE, message = FALSE, warning=FALSE}
+set.seed(4188)
+
+res <- resamples(list(Linear = model.lm, 
+                      Ridge = model.ridge,
+                      Lasso = model.lasso, 
+                      Elastic = model.enet,
+                      PCR = model.pcr,
+                      PLS = model.pls,
+                      GAM = model.gam,
+                      MARS = model.mars))
+summary(res)
+```
+
+```{r RMSE plot, echo = FALSE, message = FALSE, warning=FALSE}
+bwplot(res, metric = "RMSE",  main = "Figure 4. Model Comparing Plot based on RMSE")
+```
+
+As our target outcome is a continuous variable - recovery time, we could use RMSE( Root mean squared error), that measure error is to take the difference between the actual and predicted value for a given observation. Our objective is  minimize RMSE.
+Extracting the results for each model, the GAM model with the lowest median training RMSE.In this case, the GAM model performs the “best” (compared with the others).
+
+## Feature interpretation
+
+Once we’ve found the model that maximizes the predictive accuracy, our next goal is to interpret the model structure.Variable importance seeks to identify those variables that are most influential in our model.
+
+```{r GAM-2, echo = FALSE, message = FALSE, warning=FALSE}
+set.seed(4188)
+gam = DALEX::explain(model.gam,label = "GAM",data =x2,y = y2 %>% as.numeric(),verbose = F)
+gam_important =  DALEX::model_parts(gam)
+gam_int = plot(gam_important)
+gam_int
+
+summary(model.gam$finalModel) #Double Check
+```
+* Some of the same features that were considered highly influential in our GAM model, and importance is determined by magnitude of the standardized coefficients. 
+
+*  **BMI** -As we observed that BMI is a crucial factor associated with recovery time as being the highest importance. With the coefficient of 7.92, we would say that with one unit change in BMI value, the predicted Covid recovery time would average increase 7.92 days while controlling for other variables.
+
+* **Vaccination** -Followed with vaccined ('not vaccined' as reference group) status, is negative associated with the preidcted Covid recovery time, as the parameter coefficient is negative value, which means one unit change in vaccination status(change from Not-vaccined[code:0] to Vaccined[code:1]), the predicted recovery time would average decrease 9.61 days.
+
+* **Gender** - It is shows that gender is negative associated with the recovery time.As setting male as reference group, if we change one unit in gender, for biological gender of male[code:0] to female[code:1], the predicted recovery time would average decrease 5.9 days.
+
+* **severe status** - Participants' severe status is positive associated with the predicted recovery time('Not sereve" as reference). When controlling other variables, people who are in severe status are more likely to need another 9.15 days to recover from Covid compared with individuals who are not in severe status.
+
+* **Smoking** - Smoking status is also postive associated with the predicted recovery time ('Never smoked' as reference group). We would say that if people are former when compared people who never smoke, the predicted Covid recovery time would average increase 3.48 days while controlling for other variables. What's more, if people are current smoker, it would takes average more than 11.75 predicted recovery days when compared with people never smoke.
+
+* **Hypertension** -  Hypertension ('no hypertension' as reference group) status, is positive associated with the predicted recovery time, indicating people with hypertension that the predicted recovery time would average increase 3.40 days.
+
+* **study** - People in study B is associated with 3.84 days longer predicted recovery time than people from Study A(Study A as reference group).
+
+* **Age** - Age is positive associated with the predicted Covid recovery time. People with one unit change in age, the recovery time increase 0.774 days.
+
+* For the GAM model, the Deviance explained by the model is 42.6%, and the adjusted R-Square is 41.7%, that showing moderate level of correlation.
+
+# Conclusion
+
+Lastly, we use the GAM model with all the predictors as the final model to predict Covid recovery time. Also, we identify the extract top 20 influential variables that significantly associated with our target. It illustrates that BMI is the most influential followed by vaccination status, and gender,which matches our EDA section finding in some parts. The limitation of using GAM as the final model is that the model is restricted to be additive; GAM are additive in nature, which means there are no interaction terms in the Model.
+
+
+
+
+# Reference
+CDC. “Long COVID or Post-COVID Conditions.” Centers for Disease Control and Prevention, 16 Sept. 2021, www.cdc.gov/coronavirus/2019-ncov/long-term-effects/index.html.
+
+Davis, H.E., McCorkell, L., Vogel, J.M. et al. Long COVID: major findings, mechanisms and recommendations. Nat Rev Microbiol 21, 133–146 (2023). https://doi.org/10.1038/s41579-022-00846-2
