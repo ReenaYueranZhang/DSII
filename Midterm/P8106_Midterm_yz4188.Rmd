@@ -305,7 +305,7 @@ grid.arrange(plot.race, plot.vac,plot.smk, plot.gender, plot.hp, plot.diabetes,p
 
 ## Methods
 
-Looking back our target outcome is a continuous variable(recovery time from COVID-19 infection), we would first start with regression model,as the most simple and popular technique for predicting a continuous variable.As we only have 14 variables,all these variables in the data will be set to fit the model. From the above EDA, our dataset contains some correlated predictors, where we could perform Principal components regression (PCR) and partial least squares regression((PLS).This technique constructs a set of linear combinations of the inputs for regression. In order to to simplify a large multivariate model is to use penalized regression, we would uselasso regression and Elastic net model. For some variables, the relationship between the target outcome and the predictor variables is not linear.In these situations, we need to build a non-linear regression, like Generalized additive model (GAM) and Multivariate Adaptive Regression Splines(MARS). 
+Looking back our target outcome is a continuous variable(recovery time from COVID-19 infection), we would first start with regression model,as the most simple and popular technique for predicting a continuous variable.As we only have 14 variables,all these variables in the data will be set to fit the model. From the above EDA, our dataset contains some correlated predictors, where we could perform Principal components regression (PCR) and partial least squares regression((PLS).This technique constructs a set of linear combinations of the inputs for regression. In order to to simplify a large multivariate model is to use penalized regression, we would use Ridge regression,lasso regression and Elastic net model. For some variables, the relationship between the target outcome and the predictor variables is not linear.In these situations, we need to build a non-linear regression, like Generalized additive model (GAM) and Multivariate Adaptive Regression Splines(MARS). 
 
 One of the most robust and popular approach for estimating a model performance is k-fold cross-validation, and note that, the best model is the model that has the lowest cross-validation error, RMSE. In our study, we use 15-fold cross-validation repeated 5 times.
 
@@ -527,11 +527,13 @@ model.pls$results %>%
 ggplot(model.pls)
 ```
 
+
 3. Beyond linearity
 
-1) GAM
 
-We have detected a non-linear relationship in your data, the advantage of GAMs is that they automatically model non-linear relationships so we do not need to manually try out many different transformations on each variable individually. Here, we used train() with method = 'gam'syntax to perform GAM model.GCV is used for smoothness selection in the model; smoothing parameters are chosen to minimise prediction error. 
+1)  Generalized additive model(GAM)
+
+We have detected a non-linear relationship in your data, the advantage of GAM is that they automatically model non-linear relationships so we do not need to manually try out many different transformations on each variable individually. Here, we used train() with method = 'gam'syntax to perform GAM model.GCV is used for smoothness selection in the model; smoothing parameters are chosen to minimise prediction error. 
 
 From the output, it shows that the R-sqaured is 0.417, which is a great improvement from the former models.
 ```{r GAM,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
