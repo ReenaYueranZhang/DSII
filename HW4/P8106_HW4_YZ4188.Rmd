@@ -15,7 +15,7 @@ editor_options:
 
 # 1. In this exercise, we will build tree-based models using the College data (see “Col- lege.csv” in Homework 2). The response variable is the out-of-state tuition (Outstate). Partition the dataset into two parts: training data (80%) and test data (20%).
 
-## Package Prepare
+
 ```{r Package Prepare, echo = TRUE, message = FALSE, results='hide', warning=FALSE}
 library(tidyverse)
 library(ISLR)
@@ -96,7 +96,7 @@ rpart.plot(rpart.fit$finalModel)
 
 set.seed(1234)
 
-# Using 'caret' package to perform random forest
+# Using Package 'caret'  to perform random forest
 
 rf.grid <- expand.grid(mtry = 1:16,
                        splitrule = "variance",
@@ -116,19 +116,21 @@ rf.fit$bestTune
 
 * From the above output, ww can know that the best tuning parameters selected via CV are `mtry = 6`, `splitrule = variance` and `min.node.size = 4`.
 
-```{r QB-Variable importance, echo=TRUE,message=FALSE,warning=FALSE}
+```{r QB-Variable importance2, fig.align='center',echo=TRUE,message=FALSE,warning=FALSE}
 
 set.seed(1234)
+
 # We can extract the variable importance from the fitted models.
 
-rf2.final.per <- ranger(outstate ~ . ,
+rf.final.per <- ranger(outstate ~ . ,
                        College[RowTrain,],
                         mtry = rf.fit$bestTune[[1]],
                         splitrule = "variance",
                         min.node.size = rf.fit$bestTune[[3]],
                         importance = "permutation",
                         scale.permutation.importance = TRUE)
-barplot(sort(ranger::importance(rf2.final.per), decreasing = FALSE),
+
+barplot(sort(ranger::importance(rf.final.per), decreasing = FALSE),
         las = 2, horiz = TRUE, cex.names = 0.7,
         col = colorRampPalette(colors = c("cyan","darkblue"))(19))
 
@@ -136,9 +138,188 @@ barplot(sort(ranger::importance(rf2.final.per), decreasing = FALSE),
 * We see that the variables `expend(Instructional expenditure per student)`, `Room_Board(Room and board costs)` and `apps(Number of applications received)` are the top 3 from the variable importance.
 
 ```{r QB- test error,echo=TRUE,message=FALSE,warning=FALSE}
+set.seed(1234)
+
 pred.rf <- predict(rf.fit, newdata = College[-RowTrain,])
-test.error <- RMSE(pred.rf, College$outstate[-RowTrain])
-test.error
+test.error.rf <- RMSE(pred.rf, College$outstate[-RowTrain])
+test.error.rf
 ```
 
-* The test error is `r test.error`.
+* The test error is `r test.error.rf`.
+
+## Question C
+### Perform boosting on the training data. Report the variable importance and the test error.
+
+```{r QC-boosting,echo=TRUE,message=FALSE,warning=FALSE,fig.align='center'}
+
+# Use Package "caret" to implement boosting framework
+
+set.seed(1234)
+
+gbm.grid <- expand.grid(n.trees = c(1000, 2000, 3000, 5000),
+                        interaction.depth = 1:4,
+                        shrinkage = c(0.005,0.001),
+                        n.minobsinnode = c(1:3))
+
+
+gbm.fit <- train(outstate ~ . ,
+                 College[RowTrain,],
+                 method = "gbm",
+                 tuneGrid = gbm.grid,
+                 trControl = ctrl,
+                 verbose = FALSE)
+
+# Report the tuning parameter
+ggplot(gbm.fit, highlight = TRUE)
+gbm.fit$bestTune
+
+```
+
+* The best tuning parameters are `n.trees = 2000`, `interaction.depth = 4`, `shrinkage = 0.005` and `nminobsinode = 3`.
+
+```{r QC-Variable importance,echo=TRUE,message=FALSE,warning=FALSE}
+
+set.seed(1234)
+
+# Variable importance from boosting can be obtained using the `summary()` function.
+
+summary(gbm.fit$finalModel, las = 2, cBars = 19, cex.names = 0.6)
+
+```
+* We see that the variables `expend(Instructional expenditure per student)`, `Room_Board(Room and board costs)` and `grad_rate(Graduation rate)` are the top 3 from the variable importance, which are slightly different from what we got from random forest model.
+
+```{r QC- test error,echo=TRUE,message=FALSE,warning=FALSE}
+
+set.seed(1234)
+
+pred.glm <- predict(gbm.fit, newdata = College[-RowTrain,])
+test.error.glm <- RMSE(pred.glm, College$outstate[-RowTrain])
+test.error.glm
+
+```
+
+* TheThe test error is `r test.error.glm`.
+
+\newpage
+
+# 2. This problem involves the OJ data in the ISLR package. The data contains 1070 purchases where the customers either purchased Citrus Hill or Minute Maid Orange Juice. A number of characteristics of customers and products are recorded. Create a training set containing a random sample of 700 observations, and a test set containing the remaining observations.
+
+```{r Q2-Import Data,echo=TRUE,message=FALSE,warning=FALSE}
+set.seed(1234)
+
+# Build a classification tree using the training data, with Purchase as the response and the other variables as predictors.
+
+data(OJ) 
+OJ <- na.omit(OJ)
+
+OJ$Purchase <- factor(OJ$Purchase, c("CH","MM"))
+
+
+RowTrain.OJ <- createDataPartition(y = OJ$Purchase,
+                                   p = 0.653,
+                                   list = FALSE)
+
+# training dataset
+training.data.OJ <- OJ[RowTrain.OJ, ]
+
+# test dataset
+test.data.OJ <- OJ[-RowTrain.OJ, ]
+```
+
+## Question A
+### Build a classification tree using the training data, with Purchase as the response and the other variables as predictors. Which tree size corresponds to the lowest cross-validation error? Is this the same as the tree size obtained using the 1 SE rule?
+
+##### We use Package `caret` to fit the classification tree, and plot with the final tree.
+
+```{r Q2A-classification tree-1,echo=TRUE,message=FALSE,warning=FALSE,fig.align='center'}
+##############################
+# Lowest cross-validation error
+##############################
+
+set.seed(1234)
+
+ctrl <- trainControl(method = "cv",
+                     summaryFunction = twoClassSummary,
+                     classProbs = TRUE)
+
+rpart.fit <- train(Purchase ~ . , 
+                   OJ, 
+                   subset = RowTrain.OJ,
+                   method = "rpart",
+                   tuneGrid = data.frame(cp = exp(seq(-7,-3, len = 50))),
+                   trControl = ctrl,
+                   metric = "ROC")
+
+#Plot for Complexity Parameter selection
+ggplot(rpart.fit, highlight = TRUE, height = 30, width = 21, units = "cm")
+
+# Tree plot with the lowest cross-validation error
+rpart.plot(rpart.fit$finalModel)
+```
+
+* From the above using lowest cross-validation error tree plot, the tree size is 19.
+
+
+##### We use Package `rpart`for 1SE rule.
+
+```{r Q2A-classification tree-2,echo=TRUE,message=FALSE,warning=FALSE}
+##############################
+# 1 SE Rule
+##############################
+
+set.seed(1234)
+tree.1se <- rpart(formula = Purchase ~ . , 
+                  data = OJ,
+                  subset = RowTrain.OJ, 
+                  control = rpart.control(cp = 0))
+
+cpTable <- printcp(tree.1se)
+plotcp(tree.1se)
+
+#Tree plot with 1SE
+minErr <- which.min(cpTable[,4])
+tree.1se2<- prune(tree.1se, cp = cpTable[minErr,1])
+rpart.plot(tree.1se2)
+
+
+```
+
+* Using the 1 SE rule, we can see the tree size now is 10. The tree size obtained by using cross-validation is different from the tree size obtained by using 1 SE rule.
+
+## Question B
+### Perform boosting on the training data and report the variable importance. What is the test error rate?
+
+```{r Q2B-boosting,echo=TRUE,message=FALSE,warning=FALSE,fig.align='center'}
+
+set.seed(1234)
+
+gbmA.grid <- expand.grid(n.trees = c(2000,3000,4000,5000),
+                         interaction.depth = 1:6,
+                         shrinkage = c(0.0005,0.001,0.002),
+                         n.minobsinnode = 1)
+
+gbmA.fit <- train(Purchase ~ . ,
+                  OJ,
+                  subset = RowTrain.OJ,
+                  tuneGrid = gbmA.grid,
+                  trControl = ctrl,
+                  method = "gbm",
+                  distribution = "adaboost",
+                  metric = "ROC",
+                  verbose = FALSE)
+
+ggplot(gbmA.fit, highlight = TRUE)
+
+#Variable Importance
+summary(gbmA.fit$finalModel, las = 2, cBars = 16, cex.names = 0.6)
+
+```
+
+* We see that the variables `LoyalCH`, `PriceDiff` and `ekofPyrchase` are the top 3 from the variable importance.
+
+```{r Q2B-Test error rate, echo=TRUE,warning=FALSE,message=FALSE}
+gbmA.pred <- predict(gbmA.fit, newdata = OJ[-RowTrain.OJ,], type = "raw")
+error.rate.gbmA <- mean(gbmA.pred != OJ$Purchase[-RowTrain.OJ])
+```
+
+* The test error rate is  `r error.rate.gbmA`.
