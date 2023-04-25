@@ -305,7 +305,7 @@ grid.arrange(plot.race, plot.vac,plot.smk, plot.gender, plot.hp, plot.diabetes,p
 
 ## Methods
 
-Looking back our target outcome is a continuous variable(recovery time from COVID-19 infection), we would first start with regression model,as the most simple and popular technique for predicting a continuous variable.As we only have 14 variables,all these variables in the data will be set to fit the model. From the above EDA, our dataset contains some correlated predictors, where we could perform Principal components regression (PCR) and partial least squares regression((PLS).This technique constructs a set of linear combinations of the inputs for regression. In order to to simplify a large multivariate model is to use penalized regression, we would use Ridge regression,lasso regression and Elastic net model. For some variables, the relationship between the target outcome and the predictor variables is not linear.In these situations, we need to build a non-linear regression, like Generalized additive model (GAM) and Multivariate Adaptive Regression Splines(MARS). 
+Looking back our target outcome is a continuous variable(recovery time from COVID-19 infection), we would first start with regression model,as the most simple and popular technique for predicting a continuous variable.As we only have 15 variables,all these variables in the data will be set to fit the model. From the above EDA, our dataset contains some correlated predictors, where we could perform Principal components regression (PCR) and partial least squares regression((PLS).This technique constructs a set of linear combinations of the inputs for regression. In order to to simplify a large multivariate model is to use penalized regression, we would use Ridge regression,lasso regression and Elastic net model. For some variables, the relationship between the target outcome and the predictor variables is not linear.In these situations, we need to build a non-linear regression, like Generalized additive model (GAM) and Multivariate Adaptive Regression Splines(MARS). 
 
 One of the most robust and popular approach for estimating a model performance is k-fold cross-validation, and note that, the best model is the model that has the lowest cross-validation error, RMSE. In our study, we use 15-fold cross-validation repeated 5 times.
 
@@ -322,7 +322,7 @@ It shows that **weight and BMI**, **height and weight**, **height and BMI**, **a
 
 In this section, we’ll build a multiple regression model to predict recovery time based on the other participants' characteristics variables, such as gender, race, smoking status and so on. Once identified the model, we continue the diagnostic by checking how well the model fits the data.We use the method  = 'lm' syntax for linear regression models. 
 
-The Residual standard error (RSE) = 24.07, meaning that the observed recovery time deviate from the predicted recovery time by approximately 24.07 units in average. This corresponds to an error rate of 24.07/mean(training.data$recovery_time) = 24.07/42.93581 = 56.06%, which is pretty high. The Adjusted R-square value in the summary output is a correction for the number of 15 variables included in the predictive model. R-Squared(RSq) is 0.2524,the regression model did not explain much of the variability in the outcome. 
+The Residual standard error (RSE) = 24.07, meaning that the observed recovery time deviate from the predicted recovery time by approximately 24.07 units in average. This corresponds to an error rate of 24.07/mean(training.data$recovery_time) = 24.07/42.93581 = 56.06%, which is pretty high. The Adjusted R-square value in the summary output is a correction for the number of 15 variables included in the predictive model. R-Squared(RSq) is 0.2524,the regression model did not explain much of the variability in the outcome.
 
 ```{r linear model,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 set.seed(4188)
@@ -341,7 +341,7 @@ summary(model.lm$finalModel)
 
 24.07/mean(training.data$recovery_time) 
 
-#RMSE
+#Model performance on test data
 lm.pred <- predict(model.lm, newdata = test.data)
 lm.rmse <- sqrt(mean((lm.pred - test.data$recovery_time)^2))
 lm.rmse
@@ -355,14 +355,10 @@ The standard linear model performs poorly in this situation.A better alternative
 1) Ridge Regression
 
 Ridge regression shrinks the regression coefficients, so that variables, with minor contribution to the outcome, have their coefficients close to zero.The shrinkage of the coefficients is achieved by penalizing the regression model with a penalty term called L2-norm, which is the sum of the squared coefficients.Alpha=0 the ridge penalty.
-The output shows that the RMSE and R-squared values for the ridge regression model on the training data are 27.414 and 15.57%, respectively. It seems that no improvement from linear model or we say that even worse. Let's move on to the lasso model.
 
 ```{r Ridge regression, echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 
 set.seed(4188)
-
-#Setup a grid range of lambda values:
-
 
 # Build the model
 model.ridge <- train( x, y,
@@ -375,6 +371,7 @@ model.ridge <- train( x, y,
 plot(model.ridge, xTrans = log)
 
 # Model coefficients
+model.ridge$bestTune
 coef(model.ridge$finalModel, s = model.ridge$bestTune$lambda)
 
 
@@ -383,7 +380,7 @@ ridge.pred <- model.ridge %>%
 predict(x2) %>%
 as.vector()
 
-# Model performance metrics
+# Model performance
 ridge.rmse = RMSE(ridge.pred, test.data$recovery_time)
 ridge.rmse
 ridge.Rsquare =  caret::R2(ridge.pred, test.data$recovery_time)
@@ -394,7 +391,6 @@ ridge.Rsquare
 2) Lasso Model
 
 One disadvantage of the ridge regression is that, it will include all the predictors in the final model.Ridge regression shrinks the coefficients towards zero, but it will not set any of them exactly to zero. The lasso regression is an alternative that overcomes this drawback. It shrinks the regression coefficients toward zero by penalizing the regression model with a penalty term called L1-norm, which is the sum of the absolute coefficients. Alpha=1 is the lasso penalty.The summary output shows the model did not tune alpha because I held it at 1 for lasso regression. The optimal tuning values (at the minimum RMSE) were alpha = 1 and lambda = 0.0012.
-The lasso model finds that the an R-squared of 27.90% with RMSE of 25.37%.There is some improvement in the performance compared with linear model. Next, we we want to explore the Elastic net model.
 
 ```{r lasso model,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 set.seed(4188)
@@ -416,23 +412,23 @@ model.lasso$bestTune
 
 #Summary
 model.lasso$finalModel
-
 summary(model.lasso$finalModel)
 
 
-#RMSE
+#Model performance -test RMSE
 lasso.pred <- predict(model.lasso, newdata = x2)
 lasso.rmse <- sqrt(mean((lasso.pred - test.data$recovery_time)^2))
 lasso.rmse
 
-#R-squared
+#R-squared -test data
 Lasso.Rsquare =  caret::R2(lasso.pred, test.data$recovery_time)
 Lasso.Rsquare
 
 ```
 3) Elastic Net Model
 
-Elastic Net produces a regression model that is penalized with both the L1-norm and L2-norm. The consequence of this is to effectively shrink coefficients (like in ridge regression) and to set some coefficients to zero (as in LASSO).The caret packages tests a range of possible alpha and lambda values, then selects the best values for lambda and alpha, resulting to a final model that is an elastic net model. The optimal tuning values (at the mininum RMSE) were alpha = 0.0 and lambda = 1, so the mix is 100% ridge, 0% lasso. The lElastic Net shows that the an R-squared of 15.43% with RMSE of 27.437%. 
+Elastic Net produces a regression model that is penalized with both the L1-norm and L2-norm. The consequence of this is to effectively shrink coefficients (like in ridge regression) and to set some coefficients to zero (as in LASSO).The caret packages tests a range of possible alpha and lambda values, then selects the best values for lambda and alpha, resulting to a final model that is an elastic net model. The optimal tuning values (at the mininum RMSE) were alpha = 0.0 and lambda = 1, so the mix is 100% ridge, 0% lasso. 
+
 ```{r Elastic net,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 
 set.seed(4188)
@@ -456,12 +452,12 @@ summary(model.enet$finalModel)
 # Coefficient of the final model
 coef(model.enet$finalModel, model.enet$bestTune$lambda)
 
-#RMSE
+#Model performance -test RMSE
 enet.pred <- predict(model.enet, newdata = x2) 
 enet.rmse <- sqrt(mean((enet.pred  - test.data$recovery_time)^2))
 enet.rmse
 
-#R-squared
+#R-squared - test data
 enet.Rsquare = caret::R2(enet.pred, test.data$recovery_time)
 enet.Rsquare
 
@@ -477,9 +473,7 @@ From above EDA, this data set has multiple correlated predictor variables. Here,
 
 1) Principal Component Regression
 
-The principal component regression (PCR) first applies Principal Component Analysis on the data set to summarize the original predictor variables into few new variables also known as principal components (PCs), which are a linear combination of the original data.We simply specify method = "pcr" within train() to perform PCA on all our numeric predictors prior to fitting the model.The PCR model perform 15-fold cross validation repeated 5 times a PCR model tuning the number of principal components to use as predictors from 1-18. 
-
-By controlling for multicollinearity with PCR, we can experience significant improvement in our predictive accuracy compared to the previously obtained linear models (reducing the cross-validated RMSE from about 25 to nearly 23).
+The principal component regression (PCR) first applies Principal Component Analysis on the data set to summarize the original predictor variables into few new variables also known as principal components (PCs), which are a linear combination of the original data.We simply specify method = "pcr" within train() to perform PCA on all our numeric predictors prior to fitting the model.The PCR model perform 15-fold cross validation repeated 5 times a PCR model tuning the number of principal components to use as predictors from 1-18. By controlling for multicollinearity with PCR, we can experience significant improvement in our predictive accuracy compared to the previously obtained linear models.
 
 ```{r PCR,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 set.seed(4188)
@@ -503,7 +497,8 @@ ggplot(model.pcr)
 
 2) Partial least squares
 
-Similar to PCR, we can easily fit a PLS model by changing the method argument in train(). We found that the RMSE is also dropped as 23.88 when compared with linear model.
+Similar to PCR, we can easily fit a PLS model by changing the method argument in train(). 
+
 ```{r PLS, echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 set.seed(4188)
 model.pls <- plsr(recovery_time~.,
@@ -535,7 +530,6 @@ ggplot(model.pls)
 
 We have detected a non-linear relationship in your data, the advantage of GAM is that they automatically model non-linear relationships so we do not need to manually try out many different transformations on each variable individually. Here, we used train() with method = 'gam'syntax to perform GAM model.GCV is used for smoothness selection in the model; smoothing parameters are chosen to minimise prediction error. 
 
-From the output, it shows that the R-sqaured is 0.417, which is a great improvement from the former models.
 ```{r GAM,echo = FALSE, message = FALSE, warning=FALSE, results='hide',include=FALSE}
 set.seed(4188)
 model.gam <- train(x, y,
@@ -546,7 +540,7 @@ model.gam <- train(x, y,
 #Summary
 summary(model.gam$finalModel)
 
-#RMSE
+#Model performance -test RMSE
 gam.pred <- predict(model.gam, newdata = x2)
 gam.rmse <- sqrt(mean((gam.pred - test.data$recovery_time)^2))
 gam.rmse
@@ -554,11 +548,10 @@ gam.rmse
 regss.gam <- sum((ridge.pred - mean(ridge.pred)) ^ 2)
 tss.gam <- sum((test.data$recovery_time - mean(test.data$recovery_time)) ^ 2)
 
-# Model performance metrics
-gam.rmse = RMSE(gam.pred, test.data$recovery_time)
-gam.rmse
+# R-squared - test data
 gam.Rsquare = regss.gam  / tss.gam
 gam.Rsquare 
+
 
 ```
 
@@ -585,12 +578,13 @@ model.mars$bestTune
 #Summary
 summary(model.mars$finalModel)
 
+model.mars$results %>%
+  filter(nprune == model.mars$bestTune$nprune, degree == model.mars$bestTune$degree)
+
 # Plot
 plot(model.mars, main = "MARS Parameter Tuning")
 
-#RMSE
-model.mars$results %>%
-  filter(nprune == model.mars$bestTune$nprune, degree == model.mars$bestTune$degree)
+
 
 ```
 # Results
@@ -615,8 +609,9 @@ summary(res)
 bwplot(res, metric = "RMSE",  main = "Figure 4. Model Comparing Plot based on RMSE")
 ```
 
-As our target outcome is a continuous variable - recovery time, we could use RMSE( Root mean squared error), that measure error is to take the difference between the actual and predicted value for a given observation. Our objective is  minimize RMSE.
-Extracting the results for each model, the GAM model with the lowest median training RMSE.In this case, the GAM model performs the “best” (compared with the others).
+* **Model Performance** - As our target outcome is a continuous variable - recovery time, we could use RMSE(Root mean squared error), that measure error is to take the difference between the actual and predicted value for a given observation. Our objective is  minimize RMSE.
+Extracting the results for each model, the GAM model with the lowest median training RMSE.In this case, the GAM model performs the “best” (compared with the others).For the GAM model, the Deviance explained by the model is 42.6%, and the adjusted R-Square is 41.7%, so we say that our model predicted those values with 41.7% accuracy.It shows only moderate level of correlation.
+
 
 ## Feature interpretation
 
@@ -631,7 +626,9 @@ gam_int
 
 summary(model.gam$finalModel) #Double Check
 ```
-* Some of the same features that were considered highly influential in our GAM model, and importance is determined by magnitude of the standardized coefficients. 
+* **Model Interpretation** - Some of the same features that were considered highly influential in our GAM model, and importance is determined by magnitude of the standardized coefficients. The GAM indicates at a significance level of 5%, participants' BMI, Vaccine status, Gender, Severe Status, Smoking status, Hypertension status, Study Group are significant associated with the recovery time. 
+
+Here are the detailed interpretation for each variables:
 
 *  **BMI** -As we observed that BMI is a crucial factor associated with recovery time as being the highest importance. With the coefficient of 7.92, we would say that with one unit change in BMI value, the predicted Covid recovery time would average increase 7.92 days while controlling for other variables.
 
@@ -649,7 +646,6 @@ summary(model.gam$finalModel) #Double Check
 
 * **Age** - Age is positive associated with the predicted Covid recovery time. People with one unit change in age, the recovery time increase 0.774 days.
 
-* For the GAM model, the Deviance explained by the model is 42.6%, and the adjusted R-Square is 41.7%, that showing moderate level of correlation.
 
 # Conclusion
 
