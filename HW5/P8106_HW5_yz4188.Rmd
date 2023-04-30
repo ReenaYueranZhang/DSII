@@ -206,7 +206,7 @@ fviz_dend(hc.complete.sd, k = 3, # cut into three distinct clusters
 ind3.complete.sd <- cutree(hc.complete.sd, 3)
 
 #############################################
-# The state in each cluster After Standardized
+# The state in each cluster with with Scaled Variables
 #############################################
 
 col1.sd <- row.names(USArrests.sd[ind3.complete.sd  == 1,])
@@ -224,9 +224,16 @@ Cluster3 <- c(col3.sd, rep(" ", max_length - length(col3.sd)))
 cluster.tibble <- cbind(Cluster1, Cluster2,Cluster3)
 
 # Print
-knitr::kable(cluster.tibble, format = "simple", caption = "The state in each cluster After Standardized")
+knitr::kable(cluster.tibble, format = "simple", caption = "The state in each cluster with Scaled Variables")
+```
+```{r Q2-B:compare all, echo = TRUE, eval = TRUE, fig.align="center", fig.width=8, fig.height=4.9}
+plot(hc.complete,main="Complete Linkage Without Scaling", xlab ="", sub = "", cex = .9)
+plot(hc.complete.sd, main="Complete Linkage with Scaled Variables", xlab = "", sub = "", cex = 0.9)
 ```
 
-* Compared these two tables, we know that scaling the variables can change the clustering results. 
+* Scaling the variables impacts the clusters that are obtained, the branch lengths, and the height of the tree.  For example, without scaling, Ohio clusters with Utah while with scaling Ohio clusters nearby Pennsylvanian. In addition, the height of the un-scaled tree is 300 while the height of the scaled tree is 6. Without scaling, we cut the tree at a height of ~150 whereas we cut the scaled tree at a height of ~4 to obtain 3 clusters.  In addition, the branch for Alaska (and many other states) is shorter in the scaled tree.
+
+* In this scenario, scaling is more appropriate because `Murder`, `Assault`, and `Rape` all have unites of per 100,000 people while `UrbanPop` is the percentage of the state population that lives in urban areas. Therefore, it is important to scale so that the units of `UrbanPop` has an equal contribution to the hierarchical clustering algorithm as the other variables.
+
 * It is important to scale the variables before computing inter-observation dissimilarities in hierarchical clustering, especially when the variables are measured on different scales, which ensures that each variable has an equal contribution to the clustering process and can help to avoid bias in the clustering results.
 
