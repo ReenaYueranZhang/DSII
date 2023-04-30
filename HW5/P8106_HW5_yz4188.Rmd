@@ -1,7 +1,7 @@
 ---
 title: "P8106 Data ScienceII HW5"
 author: "Yueran Zhang"
-date: '2023-04-25'
+date: '2023-04-29'
 output:
   pdf_document:
     latex_engine: xelatex
@@ -23,13 +23,14 @@ library(factoextra)
 library(gridExtra)
 library(RColorBrewer) 
 library(jpeg)
+library(knitr)
 ```
 
 
 ## 1. In this problem, we will apply support vector machines to predict whether a given car gets high or low gas mileage based on the dataset “auto.csv” (used in Homework 3; see Homework 3 for more details of the dataset). The response variable is mpg cat. The predictors are cylinders, displacement, horsepower, weight, acceleration, year, and origin. Split the dataset into two parts: training data (70%) and test data (30%).
 
 
-```{r data import+ processing,echo = TRUE, message = FALSE, results='hide', warning=FALSE}
+```{r Q1:data import+ processing,echo = TRUE, message = FALSE, results='hide', warning=FALSE}
 
 # Data Import + Processing
 
@@ -50,7 +51,7 @@ RowTrain <- createDataPartition(y = auto.data$mpg_cat,
 
 ### Question A - Fit a support vector classifier (linear kernel) to the training data. What are the training and test error rates?
 
-```{r Question1A-linear kernel,echo = TRUE, message = FALSE, warning=FALSE}
+```{r Question1-A:linear kernel,echo = TRUE, message = FALSE, warning=FALSE,fig.align='center'}
 
 set.seed(123)
 
@@ -70,7 +71,7 @@ summary(best.linear)
 # Training error rates
 #######################
 confusionMatrix(data = best.linear$fitted,
-                reference =auto.data$mpg_cat[RowTrain])
+                reference = auto.data$mpg_cat[RowTrain])
 
 
 #######################
@@ -82,8 +83,149 @@ confusionMatrix(data = pred.linear,
                 reference = auto.data$mpg_cat[-RowTrain])
 
 ```
-From above output, 
+From above output when applying a support vector classifier to the training data, 
 
 * For the training data, the accuracy of the fitted support vector classifier reads as `0.9094(90.94%)`, for the given data and observations. If a model will perform at 92.03% accuracy then the error rate will be `1-0.9094 = 9.06%`.
 
 * For the testing data, the accuracy reads as `0.9052(90.52%)`, so the the error rate will be `1-0.9052 = 9.48%`.
+
+
+
+### Question B - Fit a support vector machine with a radial kernel to the training data. What are the training and test error rates?
+
+```{r Q1-B:vector machine,echo = TRUE, message = FALSE, warning=FALSE,fig.align='center'}
+
+set.seed(123)
+
+radial.tune <- tune.svm(mpg_cat ~ . , 
+                        data = auto.data[RowTrain,],
+                        kernel = "radial",
+                        cost = exp(seq(1,9,len=30)),
+                        gamma = exp(seq(-10,-2,len=20)))
+plot(radial.tune, transform.y = log, transform.x = log,
+     color.palette = terrain.colors)
+
+# summary(radial.tune)
+best.radial <- radial.tune$best.model
+summary(best.radial)
+
+#######################
+# Training error rates
+#######################
+confusionMatrix(data = best.radial$fitted,
+                reference = auto.data$mpg_cat[RowTrain])
+
+
+#######################
+# Test error rates
+#######################
+pred.radial <- predict(best.radial, newdata = auto.data[-RowTrain,])
+
+confusionMatrix(data = pred.radial,
+                reference = auto.data$mpg_cat[-RowTrain])
+```
+From above output when fitting a support vector machine with a radial kernel to the training data, 
+
+* For the training data, the accuracy of the fitted support vector classifier reads as `0.9674(96.74%)`, for the given data and observations. If a model will perform at 96.74% accuracy then the error rate will be `1-0.9674 = 3.26%`.
+
+* For the testing data, the accuracy reads as `0.9224(92.24%)`, so the the error rate will be `1-0.9224 = 7.76%`.
+
+
+
+\newpage
+
+
+## 2. In this problem, we perform hierarchical clustering on the states using the USArrests data in the ISLR package. For each of the 50 states in the United States, the dataset contains the number of arrests per 100,000 residents for each of three crimes: Assault, Murder, and Rape. The dataset also contains the percent of the population in each state living in urban areas, UrbanPop. The four variables will be used as features for clustering.
+
+```{r Q2:Data import,echo = TRUE, message = FALSE, results='hide', warning=FALSE}
+USArrests.dat <- USArrests %>% 
+    na.omit()
+```
+
+
+### Question A -  Using hierarchical clustering with complete linkage and Euclidean distance, cluster the states. Cut the dendrogram at a height that results in three distinct clusters. Which states belong to which clusters?
+
+```{r Q2-A:Hierarchical clustering,message = FALSE, warning=FALSE,fig.align='center'}
+
+# Here we use the Euclidean distance and complete linkage.
+hc.complete <- hclust(dist(USArrests.dat), method = "complete")
+
+# Using function `fviz_dend()` to visualize the dendrogram
+fviz_dend(hc.complete, k = 3, # cut into three distinct clusters
+                      cex = 0.3,
+                      palette = "jco",
+                      color_labels_by_k = TRUE,
+                      rect = TRUE, rect_fill = TRUE, rect_border = "jco",
+                      labels_track_height = 2.5)
+
+ind3.complete <- cutree(hc.complete, 3)
+
+#################################
+# The state in each cluster
+#################################
+
+col1 <- row.names(USArrests.dat[ind3.complete == 1,])
+col2 <- row.names(USArrests.dat[ind3.complete == 2,])
+col3 <- row.names(USArrests.dat[ind3.complete == 3,])
+
+# Determine the length of the longest column
+max_length <- max(length(col1), length(col2), length(col3)) 
+
+Cluster1 <- c(col1, rep(" ", max_length - length(col1)))
+Cluster2 <- c(col2, rep(" ", max_length - length(col2)))
+Cluster3 <- c(col3, rep(" ", max_length - length(col3)))
+
+# Combine the padded columns into a single table
+cluster.table <- cbind(Cluster1, Cluster2,Cluster3)
+
+# Print
+knitr::kable(cluster.table, format = "simple",caption = "The state in each cluster")
+
+
+```
+
+### Question B - Hierarchically cluster the states using complete linkage and Euclidean distance, after scaling the variables to have standard deviation one. Does scaling the variables change the clustering results? Why? In your opinion, should the variables be scaled before the inter-observation dissimilarities are computed?
+
+```{r Q2-B:standard deviation Hierarchically cluster,message = FALSE, warning=FALSE,fig.align='center'}
+#Standardized data
+USArrests.sd <- scale(USArrests.dat)
+
+#Fit the Euclidean distance and complete linkage
+hc.complete.sd <- hclust(dist(USArrests.sd), method = "complete")
+
+# Using function `fviz_dend()` to visualize the dendrogram
+fviz_dend(hc.complete.sd, k = 3, # cut into three distinct clusters
+                          cex = 0.3,
+                          palette = "jco",
+                          color_labels_by_k = TRUE,
+                          rect = TRUE, rect_fill = TRUE, rect_border = "jco",
+   
+                                 labels_track_height = 2.5)
+
+ind3.complete.sd <- cutree(hc.complete.sd, 3)
+
+#############################################
+# The state in each cluster After Standardized
+#############################################
+
+col1.sd <- row.names(USArrests.sd[ind3.complete.sd  == 1,])
+col2.sd <- row.names(USArrests.sd[ind3.complete.sd  == 2,])
+col3.sd <- row.names(USArrests.sd[ind3.complete.sd  == 3,])
+
+# Determine the length of the longest column
+max_length <- max(length(col1.sd), length(col2.sd), length(col3.sd)) 
+
+Cluster1 <- c(col1.sd, rep(" ", max_length - length(col1.sd)))
+Cluster2 <- c(col2.sd, rep(" ", max_length - length(col2.sd)))
+Cluster3 <- c(col3.sd, rep(" ", max_length - length(col3.sd)))
+
+# Combine the padded columns into a single table
+cluster.tibble <- cbind(Cluster1, Cluster2,Cluster3)
+
+# Print
+knitr::kable(cluster.tibble, format = "simple", caption = "The state in each cluster After Standardized")
+```
+
+* Compared these two tables, we know that scaling the variables can change the clustering results. 
+* It is important to scale the variables before computing inter-observation dissimilarities in hierarchical clustering, especially when the variables are measured on different scales, which ensures that each variable has an equal contribution to the clustering process and can help to avoid bias in the clustering results.
+
